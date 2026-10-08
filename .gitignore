@@ -1,0 +1,32 @@
+# Virtual Environment
+.venv/
+venv/
+env/
+ENV/
+
+# Python cache & bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Logs & temp files
+*.log
+debug.log
+
+# Environment variables
+.env
+.env.local
+
+# OSINT generated reports
+reports/
+*.csv
+*.xlsx
+*.pdf
+*.xmind
+
+# OS & IDE
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

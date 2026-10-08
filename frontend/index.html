@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="pt" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OSINT Hub — Investigação & Inteligência de Fontes Abertas</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#eef2ff',
+              500: '#6366f1',
+              600: '#4f46e5',
+              700: '#4338ca',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <style>
+    @keyframes pulse-glow {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.7; transform: scale(1.05); }
+    }
+    .pulsing {
+      animation: pulse-glow 2s infinite ease-in-out;
+    }
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #18181b;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #3f3f46;
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #52525b;
+    }
+  </style>
+</head>
+<body class="bg-zinc-950 text-zinc-100 min-h-screen flex flex-col font-sans selection:bg-indigo-500 selection:text-white">
+
+  <!-- Top Navigation -->
+  <header class="border-b border-zinc-800 bg-zinc-900/80 backdrop-blur sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center shadow-lg shadow-indigo-500/20">
+          <i class="fa-solid fa-satellite-dish text-white text-lg"></i>
+        </div>
+        <div>
+          <div class="flex items-center space-x-2">
+            <h1 class="font-bold text-lg text-white tracking-wide">OSINT HUB</h1>
+            <span class="text-[10px] uppercase font-semibold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Online</span>
+          </div>
+          <p class="text-xs text-zinc-400">Sherlock • Maigret • SearXNG • Web Scraper</p>
+        </div>
+      </div>
+
+      <div class="flex items-center space-x-3">
+        <a href="/docs" target="_blank" class="text-xs flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 transition">
+          <i class="fa-solid fa-book-bookmark text-indigo-400"></i>
+          <span>Swagger Docs</span>
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 py-8 flex-1 w-full space-y-6">
+
+    <!-- Tabs Navigation -->
+    <div class="flex flex-wrap gap-2 border-b border-zinc-800 pb-3">
+      <button onclick="switchTab('username')" id="tab-btn-username" class="tab-btn px-4 py-2 rounded-lg text-sm font-medium flex items-center space-x-2 bg-indigo-600 text-white shadow-md shadow-indigo-600/20 transition">
+        <i class="fa-solid fa-user-astronaut"></i>
+        <span>Pesquisa de Username (OSINT)</span>
+      </button>
+      <button onclick="switchTab('searxng')" id="tab-btn-searxng" class="tab-btn px-4 py-2 rounded-lg text-sm font-medium flex items-center space-x-2 bg-zinc-900 text-zinc-400 hover:text-white hover:bg-zinc-800 transition">
+        <i class="fa-solid fa-globe"></i>
+        <span>Busca Web (SearXNG)</span>
+      </button>
+      <button onclick="switchTab('scraper')" id="tab-btn-scraper" class="tab-btn px-4 py-2 rounded-lg text-sm font-medium flex items-center space-x-2 bg-zinc-900 text-zinc-400 hover:text-white hover:bg-zinc-800 transition">
+        <i class="fa-solid fa-id-card-clip"></i>
+        <span>Extrator de Contactos</span>
+      </button>
+      <button onclick="switchTab('system')" id="tab-btn-system" class="tab-btn px-4 py-2 rounded-lg text-sm font-medium flex items-center space-x-2 bg-zinc-900 text-zinc-400 hover:text-white hover:bg-zinc-800 transition">
+        <i class="fa-solid fa-server"></i>
+        <span>Estado do Sistema</span>
+      </button>
+    </div>
+
+    <!-- TAB 1: PESQUISA DE USERNAME -->
+    <div id="tab-content-username" class="tab-pane space-y-6">
+      
+      <!-- Input Card -->
+      <div class="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-6 shadow-xl backdrop-blur">
+        <form id="username-form" onsubmit="startUsernameSearch(event)" class="space-y-4">
+          <div class="grid grid-cols-1 md:grid-cols-12 gap-4">
+            
+            <div class="md:col-span-6">
+              <label class="block text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-2">Username Alvo</label>
+              <div class="relative">
+                <span class="absolute inset-y-0 left-0 flex items-center pl-3.5 text-zinc-500 font-mono">@</span>
+                <input type="text" id="username-input" required placeholder="ex: torvalds, elonmusk, johndoe" 
+                       class="w-full pl-9 pr-4 py-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-white placeholder-zinc-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition text-sm">
+              </div>
+            </div>
+
+            <div class="md:col-span-4">
+              <label class="block text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-2">Motor de Varredura</label>
+              <select id="engine-select" class="w-full px-3 py-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-white text-sm focus:outline-none focus:border-indigo-500 transition">
+                <option value="all">⚡ Híbrido Completo (Instantâneo + Sherlock)</option>
+                <option value="quick">⚡ Rápido (Top 25 redes prioritárias ~3s)</option>
+                <option value="sherlock">🔍 Sherlock (400+ plataformas profundas)</option>
+                <option value="maigret">🕵️ Maigret (Top 150 sites ranqueados)</option>
+              </select>
+            </div>
+
+            <div class="md:col-span-2 flex items-end">
+              <button type="submit" id="btn-search-username" class="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-medium text-sm transition flex items-center justify-center space-x-2 shadow-lg shadow-indigo-600/25">
+                <i class="fa-solid fa-magnifying-glass"></i>
+                <span>Investigar</span>
+              </button>
+            </div>
+
+          </div>
+        </form>
+
+        <!-- Progress Indicator -->
+        <div id="username-progress" class="hidden mt-6 pt-5 border-t border-zinc-800/80">
+          <div class="flex items-center justify-between text-xs text-zinc-400 mb-2">
+            <div class="flex items-center space-x-2">
+              <span class="w-2.5 h-2.5 rounded-full bg-indigo-500 pulsing"></span>
+              <span id="progress-status-text">A iniciar pesquisa...</span>
+            </div>
+            <div id="counter-badge" class="font-mono text-zinc-300">
+              <span id="found-count" class="font-bold text-emerald-400 text-sm">0</span> perfis encontrados
+            </div>
+          </div>
+          <div class="w-full bg-zinc-950 h-2 rounded-full overflow-hidden border border-zinc-800">
+            <div id="progress-bar" class="h-full bg-gradient-to-r from-indigo-500 to-violet-500 transition-all duration-300" style="width: 25%"></div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Action Bar & Filter -->
+      <div id="results-bar" class="hidden flex flex-wrap items-center justify-between gap-3 bg-zinc-900/40 p-4 border border-zinc-800/60 rounded-xl">
+        <div class="flex items-center space-x-2 w-full sm:w-auto">
+          <i class="fa-solid fa-filter text-zinc-500 text-sm pl-1"></i>
+          <input type="text" id="filter-input" oninput="filterResults()" placeholder="Filtrar por nome do site..." 
+                 class="px-3 py-1.5 bg-zinc-950 border border-zinc-800 rounded-lg text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-indigo-500 w-64">
+        </div>
+        <div class="flex items-center space-x-2">
+          <button onclick="exportJSON()" class="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs rounded-lg flex items-center space-x-1.5 transition">
+            <i class="fa-solid fa-file-code text-indigo-400"></i>
+            <span>Exportar JSON</span>
+          </button>
+          <button onclick="exportCSV()" class="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs rounded-lg flex items-center space-x-1.5 transition">
+            <i class="fa-solid fa-file-csv text-emerald-400"></i>
+            <span>Exportar CSV</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Results Grid -->
+      <div id="username-results-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        <!-- Cards adicionados dinamicamente via JS -->
+      </div>
+
+      <div id="username-empty-state" class="text-center py-12 border border-dashed border-zinc-800 rounded-2xl">
+        <i class="fa-solid fa-fingerprint text-4xl text-zinc-700 mb-3"></i>
+        <p class="text-sm text-zinc-400 font-medium">Nenhuma pesquisa ativa</p>
+        <p class="text-xs text-zinc-600 mt-1">Insere um username acima para iniciar a varredura OSINT em tempo real.</p>
+      </div>
+
+    </div>
+
+    <!-- TAB 2: BUSCA WEB (SEARXNG) -->
+    <div id="tab-content-searxng" class="tab-pane hidden space-y-6">
+      
+      <div class="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-6 shadow-xl backdrop-blur">
+        <form onsubmit="startWebSearch(event)" class="space-y-4">
+          <div class="grid grid-cols-1 md:grid-cols-12 gap-4">
+            
+            <div class="md:col-span-8">
+              <label class="block text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-2">Busca na Web (Nome, Email, Domínio, Palavra-chave)</label>
+              <input type="text" id="web-query-input" required placeholder="ex: João Silva lisboa, nome@empresa.com, site:linkedin.com joao" 
+                     class="w-full px-4 py-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-white placeholder-zinc-500 focus:outline-none focus:border-indigo-500 text-sm">
+            </div>
+
+            <div class="md:col-span-2">
+              <label class="block text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-2">Categoria</label>
+              <select id="web-category-select" class="w-full px-3 py-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-white text-sm focus:outline-none focus:border-indigo-500">
+                <option value="general">Geral (Web)</option>
+                <option value="news">Notícias</option>
+                <option value="social_media">Redes Sociais</option>
+                <option value="it">Tecnologia & Dev</option>
+              </select>
+            </div>
+
+            <div class="md:col-span-2 flex items-end">
+              <button type="submit" id="btn-search-web" class="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-medium text-sm transition flex items-center justify-center space-x-2 shadow-lg shadow-indigo-600/25">
+                <i class="fa-solid fa-magnifying-glass"></i>
+                <span>Pesquisar</span>
+              </button>
+            </div>
+
+          </div>
+        </form>
+      </div>
+
+      <!-- Web Results Container -->
+      <div id="web-results-container" class="space-y-3">
+        <!-- Renderizado dinamicamente -->
+      </div>
+
+    </div>
+
+    <!-- TAB 3: EXTRATOR DE CONTACTOS & SCRAPING -->
+    <div id="tab-content-scraper" class="tab-pane hidden space-y-6">
+      
+      <div class="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-6 shadow-xl backdrop-blur">
+        <form onsubmit="startScrape(event)" class="space-y-4">
+          <div class="grid grid-cols-1 md:grid-cols-12 gap-4">
+            
+            <div class="md:col-span-10">
+              <label class="block text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-2">URL Alvo para Análise & Extração</label>
+              <input type="url" id="scrape-url-input" required placeholder="https://exemplo.com/contactos ou https://empresa.com" 
+                     class="w-full px-4 py-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-white placeholder-zinc-500 focus:outline-none focus:border-indigo-500 text-sm">
+            </div>
+
+            <div class="md:col-span-2 flex items-end">
+              <button type="submit" id="btn-scrape" class="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-medium text-sm transition flex items-center justify-center space-x-2 shadow-lg shadow-indigo-600/25">
+                <i class="fa-solid fa-spider"></i>
+                <span>Extrair Dados</span>
+              </button>
+            </div>
+
+          </div>
+        </form>
+      </div>
+
+      <!-- Scraper Results -->
+      <div id="scraper-results-container" class="hidden space-y-4">
+        <!-- Detalhes do Scraper -->
+      </div>
+
+    </div>
+
+    <!-- TAB 4: ESTADO DO SISTEMA -->
+    <div id="tab-content-system" class="tab-pane hidden space-y-6">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-6">
+          <h3 class="font-bold text-white text-base mb-4 flex items-center space-x-2">
+            <i class="fa-solid fa-server text-indigo-400"></i>
+            <span>Motores Disponíveis</span>
+          </h3>
+          <ul class="space-y-3 text-sm" id="system-engines-list">
+            <li class="flex items-center justify-between border-b border-zinc-800/80 pb-2">
+              <span class="text-zinc-400">Motor Rápido Assíncrono (Top 25)</span>
+              <span class="text-emerald-400 font-mono">Disponível</span>
+            </li>
+            <li class="flex items-center justify-between border-b border-zinc-800/80 pb-2">
+              <span class="text-zinc-400">Sherlock Project (400+ sites)</span>
+              <span class="text-emerald-400 font-mono">Instalado</span>
+            </li>
+            <li class="flex items-center justify-between border-b border-zinc-800/80 pb-2">
+              <span class="text-zinc-400">Maigret (6000+ sites)</span>
+              <span class="text-emerald-400 font-mono">Instalado</span>
+            </li>
+            <li class="flex items-center justify-between border-b border-zinc-800/80 pb-2">
+              <span class="text-zinc-400">SearXNG (Meta-busca)</span>
+              <span class="text-indigo-400 font-mono">Fallback ativo</span>
+            </li>
+            <li class="flex items-center justify-between pb-2">
+              <span class="text-zinc-400">Contact Scraper (Emails & Telefones)</span>
+              <span class="text-emerald-400 font-mono">Pronto</span>
+            </li>
+          </ul>
+        </div>
+
+        <div class="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-6">
+          <h3 class="font-bold text-white text-base mb-4 flex items-center space-x-2">
+            <i class="fa-solid fa-circle-info text-violet-400"></i>
+            <span>Informações da Plataforma</span>
+          </h3>
+          <div class="space-y-3 text-sm text-zinc-300">
+            <p><span class="text-zinc-500">Framework:</span> FastAPI com Streaming SSE</p>
+            <p><span class="text-zinc-500">Rate Limiter:</span> SlowAPI (Proteção contra bloqueios de IP)</p>
+            <p><span class="text-zinc-500">Cache:</span> In-Memory TTL Store (com suporte a Redis)</p>
+            <p><span class="text-zinc-500">Endpoints:</span> <a href="/docs" target="_blank" class="text-indigo-400 underline">Consultar documentação OpenAPI</a></p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <footer class="border-t border-zinc-800/80 py-4 text-center text-xs text-zinc-500">
+    OSINT Hub • Construído com FastAPI, Sherlock, Maigret, SearXNG & Tailwind CSS
+  </footer>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

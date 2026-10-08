@@ -1,0 +1,38 @@
+version: "3.8"
+
+services:
+  # 1. API Backend FastAPI
+  osint-api:
+    build: .
+    container_name: osint-api
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - SEARXNG_URL=http://searxng:8080
+      - REDIS_URL=redis://redis:6379/0
+      - HOST=0.0.0.0
+      - PORT=8000
+    depends_on:
+      - searxng
+      - redis
+
+  # 2. SearXNG (Meta-motor de busca)
+  searxng:
+    image: searxng/searxng:latest
+    container_name: osint-searxng
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./searxng/settings.yml:/etc/searxng/settings.yml:ro
+    environment:
+      - SEARXNG_BASE_URL=http://localhost:8080/
+
+  # 3. Cache Redis
+  redis:
+    image: redis:alpine
+    container_name: osint-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"

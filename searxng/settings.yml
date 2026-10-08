@@ -1,0 +1,32 @@
+use_default_settings: true
+
+general:
+  debug: false
+  instance_name: "OSINT Hub SearXNG"
+
+server:
+  port: 8080
+  bind_address: "0.0.0.0"
+  secret_key: "osint-hub-secret-key-change-in-production"
+  limiter: false
+  image_proxy: true
+
+search:
+  safe_search: 0
+  autocomplete: ""
+  default_lang: "pt"
+  formats:
+    - html
+    - json
+
+engines:
+  - name: duckduckgo
+    engine: duckduckgo
+  - name: google
+    engine: google
+  - name: bing
+    engine: bing
+  - name: github
+    engine: github
+  - name: reddit
+    engine: reddit
