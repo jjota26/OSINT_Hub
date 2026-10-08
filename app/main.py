@@ -56,3 +56,7 @@ if FRONTEND_DIR.exists():
     @app.get("/", include_in_schema=False)
     async def serve_index():
         return FileResponse(FRONTEND_DIR / "index.html")
+
+    @app.get("/app.js", include_in_schema=False)
+    async def serve_app_js():
+        return FileResponse(FRONTEND_DIR / "app.js")

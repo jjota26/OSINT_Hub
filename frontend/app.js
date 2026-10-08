@@ -1,3 +1,24 @@
+// URL Base Dinâmica da API (Suporta FastAPI na porta 8000, Centauro na porta 80, e Render)
+function getApiBase() {
+  if (window.location.port === '8000') {
+    return '';
+  }
+  // Se estiver a correr pelo Centauro em localhost ou IP local
+  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    return 'http://localhost:8000';
+  }
+  if (window.location.hostname.startsWith('192.168.') || window.location.hostname.startsWith('10.')) {
+    return `http://${window.location.hostname}:8000`;
+  }
+  // Se for no domínio público do Centauro
+  if (window.location.hostname.includes('sigec-pro.com')) {
+    return `https://${window.location.hostname}:8000`;
+  }
+  return '';
+}
+
+const API_BASE = getApiBase();
+
 // Estado global
 let foundProfiles = [];
 let eventSource = null;
@@ -63,7 +84,7 @@ function startUsernameSearch(event) {
   btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i><span>A procurar...</span>`;
 
   // Conecta ao endpoint de SSE do FastAPI
-  const url = `/api/username/stream/${encodeURIComponent(username)}?engine=${engine}`;
+  const url = `${API_BASE}/api/username/stream/${encodeURIComponent(username)}?engine=${engine}`;
   eventSource = new EventSource(url);
 
   eventSource.onmessage = function (e) {
@@ -204,7 +225,7 @@ async function startWebSearch(event) {
   container.innerHTML = `<div class="text-zinc-500 text-sm py-4">A consultar motores de busca...</div>`;
 
   try {
-    const res = await fetch(`/api/search/web?q=${encodeURIComponent(q)}&categories=${cat}`);
+    const res = await fetch(`${API_BASE}/api/search/web?q=${encodeURIComponent(q)}&categories=${cat}`);
     const data = await res.json();
 
     if (!data.results || data.results.length === 0) {
@@ -258,7 +279,7 @@ async function startScrape(event) {
   container.innerHTML = `<div class="text-zinc-500 text-sm py-4">A analisar o website e a extrair contactos...</div>`;
 
   try {
-    const res = await fetch(`/api/scraper/extract?url=${encodeURIComponent(url)}`);
+    const res = await fetch(`${API_BASE}/api/scraper/extract?url=${encodeURIComponent(url)}`);
     if (!res.ok) {
       const errData = await res.json();
       throw new Error(errData.detail || 'Erro na requisição');
