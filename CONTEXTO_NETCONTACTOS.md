@@ -2,7 +2,7 @@
 
 - **Nome do Projeto:** NetContactos (Plataforma de Investigação, Localização e OSINT)
 - **Autor e Proprietário:** José Centúrio
-- **Data de Atualização:** 08/10/2026 19:30
+- **Data de Atualização:** 08/10/2026 21:05
 - **Estado do Sistema:** ✅ 100% Operacional, Online e Conectado Globalmente
 
 ---
@@ -24,32 +24,24 @@
 2. **Ambiente de Desenvolvimento (Disco N:\):**
    `N:\Projectos Python\OSINT_Hub\`
 3. **Ambiente Virtual Python:**
-   `N:\Projectos Python\OSINT_Hub\.venv\`
-4. **Scripts de Arranque do Servidor:**
-   - `Z:\Nuvem_Hosting\INICIAR_CENTAURO.bat` (inicia Centauro + NetContactos em segundo plano)
-   - `Z:\Nuvem_Hosting\PARAR_CENTAURO.bat` (encerra os serviços)
-   - `Z:\Nuvem_Hosting\scripts\start_centauro.ps1` (orquestrador de processos em background)
-   - `run.bat` e `start.py` (arranque direto independente do NetContactos)
+   `Z:\Nuvem_Hosting\users\centurio\www\Api Contactos\.venv\`
+4. **Serviço Windows em Background:**
+   Tarefa agendada `NetContactos` (FastAPI porta 8000).
 
 ---
 
 ## 🛠️ Arquitetura Técnica e Módulos
 
-### 1. Novo Motor: Pesquisa de Pessoas & Empresas (`/api/person/search`)
-- **Ficheiros:** `app/services/people_service.py` e `app/routers/people.py`
-- **Capacidades:**
-  - Localiza perfis profissionais no **LinkedIn**, **CVs**, redes empresariais e diretórios com excertos da carreira.
-  - Extrai emails reais presentes nas páginas públicas.
-  - Gera **previsões de emails corporativos** (`nome.apelido@empresa.com`, `napelido@empresa.com`, etc.) com botão de cópia com 1 clique.
-  - Recolhe menções em notícias, comunicados e páginas oficiais da empresa.
-  - Gera variações de username para testar nas redes sociais.
-
-### 2. Correção de Conexão Web & Portas Cloudflare
-- **Causa Raiz Identificada:** O `app.js` antigo forçava a porta `:8000` quando acedido pelo domínio `sigec-pro.com`. Como a Cloudflare apenas aceita a porta padrão 443 (HTTPS), o browser ficava eternamente bloqueado em *"A conectar ao motor de varredura..."*.
-- **Solução Implementada:** `API_BASE = ''` (URL relativo). O tráfego passa na porta 443 normal para o Centauro (`server.js`), que faz proxy reverso transparente para o FastAPI na porta 8000.
-- **Cache-Buster & Headers:** Atualizado `app.js?v=20261008_2` e adicionados cabeçalhos `Cache-Control: no-cache` em `server.js`.
-
-### 3. Blindagem da Aba de Username
-- **Deteção de Nomes com Espaço:** Se o utilizador escrever um nome como `Paula Gracia`, o sistema:
-  - Exibe um alerta inteligente sugerindo a nova aba "Pessoas & Empresas".
-  - Higieniza automaticamente o username para `@paulagracia` sem crashar nem bloquear a pesquisa.
+### 1. Motor de Investigação: Pessoas, Empresas & Colaboradores (`/api/person/search`)
+- **Ficheiros:** `app/services/people_service.py`, `app/services/searxng_service.py`, `frontend/app.js`, `frontend/index.html`.
+- **Capacidades Operacionais:**
+  - **Pesquisa Flexível Multi-Campo ou Campo Único:** Permite pesquisar isoladamente por qualquer campo (Nome, Empresa, Cargo ou País/Cidade) ou de forma combinada, sem obrigar ao preenchimento do nome.
+  - **Identificação do Domínio e Validação MX:** Localiza o domínio corporativo oficial e valida os registos DNS MX em tempo real.
+  - **Rastreio Social Dissimulado & Anti-Bloqueio:** Utiliza multi-motor com impersonação TLS (Chrome 120), Yahoo Search com descodificação de redirecionamentos `/RU=` e SearXNG, contornando bloqueios de scraping.
+  - **Extração Furtiva de Colaboradores de Redes Sociais:**
+    - Localiza perfis do **LinkedIn** e diretórios executivos (**ContactOut**).
+    - Extrai nomes completos (mesmo a partir dos slugs de URL descarregados), cargos profissionais e ligações diretas aos perfis.
+    - Associa o email verificado em uso real ou projeta o endereço de email de acordo com o padrão corporativo comprovado da empresa (`[primeiro_nome]@dominio`, `[primeiro_nome].[ultimo_nome]@dominio`, etc.).
+    - Associa telefones em uso (linha direta individual ou central telefónica da sede com botão de ligação e cópia).
+  - **Cards Visuais Dedicados:** Apresenta a grelha interactiva de colaboradores identificados com foto/iniciais, cargo, botões de ação e status de precisão.
+  - **Placeholders Limpos:** Todos os campos de introdução mantêm-se limpos sem nomes de exemplo.
