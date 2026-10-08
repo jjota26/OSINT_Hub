@@ -1,3 +1,4 @@
+import asyncio
 import urllib.parse
 import base64
 import re
@@ -42,7 +43,7 @@ async def search_brave_cffi(query: str) -> List[Dict[str, Any]]:
     url = f"https://search.brave.com/search?q={urllib.parse.quote(query)}"
     results = []
     try:
-        res = cffi_requests.get(url, impersonate="chrome120", verify=False, timeout=6.5)
+        res = cffi_requests.get(url, impersonate="chrome120", verify=False, timeout=4.5)
         if res.status_code == 200:
             soup = BeautifulSoup(res.text, "html.parser")
             for sn in soup.select("div.snippet"):
@@ -69,7 +70,7 @@ async def search_yahoo_cffi(query: str) -> List[Dict[str, Any]]:
     url = f"https://search.yahoo.com/search?p={urllib.parse.quote(query)}"
     results = []
     try:
-        res = cffi_requests.get(url, impersonate="chrome120", verify=False, timeout=6.5)
+        res = cffi_requests.get(url, impersonate="chrome120", verify=False, timeout=4.5)
         if res.status_code == 200:
             soup = BeautifulSoup(res.text, "html.parser")
             for li in soup.find_all(["li", "div"], class_=re.compile(r"\balgo\b")):
@@ -106,7 +107,7 @@ async def search_duckduckgo_cffi(query: str) -> List[Dict[str, Any]]:
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
                 "Referer": "https://duckduckgo.com/"
             })
-            res = s.get(url, impersonate="chrome120", verify=False, timeout=6.5)
+            res = s.get(url, impersonate="chrome120", verify=False, timeout=4.5)
             if res.status_code == 200:
                 soup = BeautifulSoup(res.text, "html.parser")
                 for r in soup.select(".result"):
@@ -226,41 +227,29 @@ async def execute_web_search(query: str, categories: str = "general") -> Dict[st
     results = []
     seen_urls = set()
 
-    # 1. Tenta SearXNG local (se ativo)
-    local_res = await search_local_searxng(query, categories)
-    for r in local_res:
-        if r["url"] not in seen_urls:
-            seen_urls.add(r["url"])
-            results.append(r)
+    # 1. Motores Principais em Paralelo Concorrente (Yahoo + Brave)
+    engine_tasks = [
+        search_yahoo_cffi(query),
+        search_brave_cffi(query)
+    ]
+    batch_res = await asyncio.gather(*engine_tasks, return_exceptions=True)
+    for b in batch_res:
+        if isinstance(b, list):
+            for r in b:
+                if r.get("url") and r["url"] not in seen_urls:
+                    seen_urls.add(r["url"])
+                    results.append(r)
 
-    # 2. Brave Search (Alta precisão, anti-bot TLS Chrome)
-    brave_res = await search_brave_cffi(query)
-    for r in brave_res:
-        if r["url"] not in seen_urls:
-            seen_urls.add(r["url"])
-            results.append(r)
-
-    # 3. Yahoo Search (Excelente para LinkedIn, diretórios e perfis)
-    yahoo_res = await search_yahoo_cffi(query)
-    for r in yahoo_res:
-        if r["url"] not in seen_urls:
-            seen_urls.add(r["url"])
-            results.append(r)
-
-    # 4. DuckDuckGo (snippets e diretórios ricos)
-    ddg_res = await search_duckduckgo_cffi(query)
-    for r in ddg_res:
-        if r["url"] not in seen_urls:
-            seen_urls.add(r["url"])
-            results.append(r)
-
-    # 5. Se ainda houver poucos resultados (< 4), complementa com Bing
-    if len(results) < 4:
-        bing_res = await search_bing_fallback(query)
-        for r in bing_res:
-            if r["url"] not in seen_urls:
-                seen_urls.add(r["url"])
-                results.append(r)
+    # 2. Se houver poucos resultados (< 3), complementa rapidamente com DuckDuckGo
+    if len(results) < 3:
+        try:
+            ddg_res = await search_duckduckgo_cffi(query)
+            for r in ddg_res:
+                if r.get("url") and r["url"] not in seen_urls:
+                    seen_urls.add(r["url"])
+                    results.append(r)
+        except Exception:
+            pass
 
     if results:
         cache.set(cache_key, results, ttl=1800)

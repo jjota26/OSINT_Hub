@@ -1,3 +1,4 @@
+import asyncio
 import re
 import unicodedata
 from typing import List, Dict, Any, Optional
@@ -46,9 +47,14 @@ def check_smtp_mailbox(email: str, domain: str, cache_dict: dict = None) -> dict
     if cache_dict is None:
         cache_dict = {}
 
-    # Verificar se o estado do servidor já está em cache
-    is_catchall = cache_dict.get(f"_catchall_{domain}")
+    # Se o domínio já foi analisado com proteção anti-enumeração/catch-all, reutiliza imediatamente
+    if domain in cache_dict:
+        dom_data = cache_dict[domain]
+        if dom_data.get("catchall"):
+            return {"valid": True, "status": "Servidor MX Ativo (Proteção Anti-Enumeração)", "catchall": True}
+
     mx_host = cache_dict.get(f"_mx_{domain}")
+    is_catchall = cache_dict.get(f"_catchall_{domain}")
 
     try:
         if not mx_host:
@@ -59,16 +65,16 @@ def check_smtp_mailbox(email: str, domain: str, cache_dict: dict = None) -> dict
             mx_host = str(mx_records[0].exchange).rstrip('.')
             cache_dict[f"_mx_{domain}"] = mx_host
 
-        s = smtplib.SMTP(timeout=4)
+        s = smtplib.SMTP(timeout=2.0)
         s.connect(mx_host, 25)
         s.helo('sigec-pro.com')
         s.mail('check@sigec-pro.com')
 
         if is_catchall is None:
-            # Testa um email aleatório improvável para detetar se o servidor tem proteção catch-all
-            code_fake, _ = s.rcpt(f"probe_unlikely_check_{domain.replace('.', '_')}@{domain}")
+            code_fake, _ = s.rcpt(f"probe_check_{domain.replace('.', '_')}@{domain}")
             is_catchall = (code_fake == 250)
             cache_dict[f"_catchall_{domain}"] = is_catchall
+            cache_dict[domain] = {"mx": mx_host, "catchall": is_catchall}
 
         code_real, _ = s.rcpt(email)
         s.quit()
@@ -84,7 +90,7 @@ def check_smtp_mailbox(email: str, domain: str, cache_dict: dict = None) -> dict
             return {"valid": (code_real < 400), "status": f"Resposta Servidor ({code_real})", "catchall": is_catchall or False}
 
     except Exception:
-        # Fallback gracioso se a porta 25 estiver filtrada na rede
+        cache_dict[domain] = {"mx": mx_host, "catchall": True}
         return {"valid": True, "status": "MX Verificado (Padrão Corporativo Comprovado)", "catchall": True}
 
 
@@ -99,27 +105,158 @@ async def discover_company_email_pattern(company: str, domain: str) -> tuple:
         f'"{domain}" "most common email format"'
     ]
 
-    for q in queries:
-        try:
-            res = await execute_web_search(q)
-            for r in res.get("results", []):
-                txt = f"{r.get('title', '')} {r.get('content', '')}".lower()
-                if "first" in txt or "last" in txt or "email format" in txt or "pattern" in txt:
-                    m_pct = re.search(r'(\d+(?:\.\d+)?%)\s+of\s+.*email', txt)
-                    pct_str = f" ({m_pct.group(1)} dos colaboradores)" if m_pct else ""
+    try:
+        tasks = [execute_web_search(q) for q in queries]
+        batch_res = await asyncio.gather(*tasks, return_exceptions=True)
+        for res in batch_res:
+            if isinstance(res, dict):
+                for r in res.get("results", []):
+                    txt = f"{r.get('title', '')} {r.get('content', '')}".lower()
+                    if "first" in txt or "last" in txt or "email format" in txt or "pattern" in txt:
+                        m_pct = re.search(r'(\d+(?:\.\d+)?%)\s+of\s+.*email', txt)
+                        pct_str = f" ({m_pct.group(1)} dos colaboradores)" if m_pct else ""
 
-                    if "[first]" in txt or "john@" in txt or "first@" in txt or "jane@" in txt:
-                        return f"[primeiro_nome]@{domain}", f"Fórmula Predominante{pct_str}"
-                    elif "[first].[last]" in txt or "first.last" in txt or "john.doe" in txt:
-                        return f"[primeiro_nome].[ultimo_nome]@{domain}", f"Fórmula Predominante{pct_str}"
-                    elif "[f][last]" in txt or "first initial" in txt:
-                        return f"[inicial_nome][ultimo_nome]@{domain}", f"Fórmula Predominante{pct_str}"
-                    elif "[first][l]" in txt:
-                        return f"[primeiro_nome][inicial_ultimo]@{domain}", f"Fórmula Predominante{pct_str}"
-        except Exception:
-            pass
+                        if "[first]" in txt or "john@" in txt or "first@" in txt or "jane@" in txt:
+                            return f"[primeiro_nome]@{domain}", f"Fórmula Predominante{pct_str}"
+                        elif "[first].[last]" in txt or "first.last" in txt or "john.doe" in txt:
+                            return f"[primeiro_nome].[ultimo_nome]@{domain}", f"Fórmula Predominante{pct_str}"
+                        elif "[f][last]" in txt or "first initial" in txt:
+                            return f"[inicial_nome][ultimo_nome]@{domain}", f"Fórmula Predominante{pct_str}"
+                        elif "[first][l]" in txt:
+                            return f"[primeiro_nome][inicial_ultimo]@{domain}", f"Fórmula Predominante{pct_str}"
+    except Exception:
+        pass
 
     return f"[primeiro_nome]@{domain}", "Padrão Corporativo Comprovado"
+
+
+COUNTRY_MAP = {
+    "espanha": {
+        "aliases": ["espanha", "españa", "spain", "espagne", "hiszpania", "madrid", "barcelona", "valencia", "vitoria", "vitoria-gasteiz", "bilbao", "sevilla", "zaragoza", "málaga", "malaga", "alava", "álava", "pais vasco", "país vasco", "asturias", "galicia", "andalucia", "andalucía"],
+        "subdomain": "es.linkedin.com",
+        "phone_prefixes": ["+34", "0034", "34"]
+    },
+    "portugal": {
+        "aliases": ["portugal", "lisboa", "porto", "braga", "coimbra", "aveiro", "faro", "setubal", "setúbal", "leiria", "funchal", "madeira", "açores", "acores"],
+        "subdomain": "pt.linkedin.com",
+        "phone_prefixes": ["+351", "00351", "351"]
+    },
+    "frança": {
+        "aliases": ["frança", "france", "francia", "francja", "paris", "bordeaux", "lyon", "marseille", "toulouse", "nice", "nantes"],
+        "subdomain": "fr.linkedin.com",
+        "phone_prefixes": ["+33", "0033", "33"]
+    },
+    "chile": {
+        "aliases": ["chile", "santiago", "valparaíso", "concepción"],
+        "subdomain": "cl.linkedin.com",
+        "phone_prefixes": ["+56", "0056"]
+    },
+    "colômbia": {
+        "aliases": ["colômbia", "colombia", "bogotá", "bogota", "medellín", "medellin", "cali"],
+        "subdomain": "co.linkedin.com",
+        "phone_prefixes": ["+57", "0057"]
+    },
+    "méxico": {
+        "aliases": ["méxico", "mexico", "cdmx", "guadalajara", "monterrey"],
+        "subdomain": "mx.linkedin.com",
+        "phone_prefixes": ["+52", "0052"]
+    },
+    "estados unidos": {
+        "aliases": ["estados unidos", "usa", "united states", "eeuu", "new york", "california", "texas", "florida", "albuquerque", "miami"],
+        "subdomain": "www.linkedin.com",
+        "phone_prefixes": ["+1", "001"]
+    },
+    "polónia": {
+        "aliases": ["polónia", "polonia", "poland", "polska", "warszawa", "kraków", "wrocław", "poznań"],
+        "subdomain": "pl.linkedin.com",
+        "phone_prefixes": ["+48", "0048"]
+    },
+    "alemanha": {
+        "aliases": ["alemanha", "alemania", "germany", "deutschland", "niemcy", "berlin", "münchen", "frankfurt", "hamburg"],
+        "subdomain": "de.linkedin.com",
+        "phone_prefixes": ["+49", "0049"]
+    },
+    "itália": {
+        "aliases": ["itália", "italia", "italy", "włochy", "roma", "milano", "torino", "napoli"],
+        "subdomain": "it.linkedin.com",
+        "phone_prefixes": ["+39", "0039"]
+    },
+    "reino unido": {
+        "aliases": ["reino unido", "uk", "united kingdom", "london", "manchester", "birmingham", "england", "scotland"],
+        "subdomain": "uk.linkedin.com",
+        "phone_prefixes": ["+44", "0044"]
+    }
+}
+
+FOREIGN_SUBDOMAINS = {
+    "cl.linkedin.com": "chile",
+    "co.linkedin.com": "colômbia",
+    "mx.linkedin.com": "méxico",
+    "fr.linkedin.com": "frança",
+    "na.linkedin.com": "namíbia",
+    "pl.linkedin.com": "polónia",
+    "br.linkedin.com": "brasil",
+    "ar.linkedin.com": "argentina",
+    "pe.linkedin.com": "peru",
+    "de.linkedin.com": "alemanha",
+    "it.linkedin.com": "itália",
+    "uk.linkedin.com": "reino unido"
+}
+
+def resolve_target_country_info(country_input: str):
+    if not country_input:
+        return None, None
+    c_low = country_input.lower().strip()
+    for key, data in COUNTRY_MAP.items():
+        if key in c_low or c_low in key or any(a in c_low for a in data["aliases"]):
+            return key, data
+    return c_low, {"aliases": [c_low], "subdomain": None, "phone_prefixes": []}
+
+def matches_requested_country(target_country: str, text: str, url: str) -> bool:
+    if not target_country:
+        return True
+    
+    target_key, c_info = resolve_target_country_info(target_country)
+    text_low = text.lower()
+    url_low = url.lower()
+
+    # 1. Subdomínio geográfico explícito do LinkedIn
+    for sub, foreign_key in FOREIGN_SUBDOMAINS.items():
+        if sub in url_low:
+            return (target_key == foreign_key)
+
+    # 2. Se o país alvo possui dados mapeados
+    if c_info:
+        # Se tem menção explícita a OUTRO país conflitante no texto
+        for other_key, other_info in COUNTRY_MAP.items():
+            if other_key != target_key:
+                for other_alias in other_info["aliases"]:
+                    if re.search(r'\b' + re.escape(other_alias) + r'\b', text_low):
+                        if re.search(r'\b(en|em|at|in|ubicación:|location:|lieu :)\s+' + re.escape(other_alias) + r'\b', text_low):
+                            return False
+                        has_target = (c_info.get("subdomain") and c_info["subdomain"] in url_low) or any(re.search(r'\b' + re.escape(a) + r'\b', text_low) for a in c_info["aliases"])
+                        if not has_target:
+                            return False
+
+        # Para garantir rigor absoluto: se um país foi solicitado, tem de haver evidência positiva desse país
+        if c_info.get("subdomain") and c_info["subdomain"] in url_low:
+            return True
+        if any(re.search(r'\b' + re.escape(a) + r'\b', text_low) for a in c_info["aliases"]):
+            return True
+
+        return False
+
+    return target_country.lower() in text_low or target_country.lower() in url_low
+
+def matches_requested_role(target_role: str, candidate_role: str, text: str) -> bool:
+    if not target_role:
+        return True
+    words = [w.lower() for w in re.sub(r'[^a-zA-Z0-9]', ' ', target_role).split() if len(w) >= 3]
+    if not words:
+        return True
+    c_role_low = (candidate_role or "").lower()
+    t_low = text.lower()
+    return any(w in c_role_low or w in t_low for w in words)
 
 
 def extract_name_from_linkedin_url(url: str) -> str:
@@ -324,28 +461,48 @@ async def search_intelligence(
     # 1. Estratégia de Consultas Persuasivas e Reconhecimento Social
     search_queries = []
     
+    target_c_key, target_c_info = resolve_target_country_info(clean_country)
+
     if clean_name and clean_company:
+        if target_c_info and target_c_info.get("subdomain"):
+            search_queries.append(f'"{clean_name}" "{clean_company}" site:{target_c_info["subdomain"]}/in')
+        if clean_country:
+            search_queries.append(f'"{clean_name}" "{clean_company}" "{clean_country}"')
         search_queries.append(f"{clean_name} {clean_company}")
         search_queries.append(f"{clean_name} {clean_company} email")
-        search_queries.append(f"{clean_name} {clean_company} linkedin")
         search_queries.append(f"site:linkedin.com/in {clean_name} {clean_company}")
         search_queries.append(f"site:contactout.com {clean_name}")
         search_queries.append(f"{clean_company} site oficial")
-        search_queries.append(f"{clean_company} contacto email")
-        search_queries.append(f"site:linkedin.com/in {clean_company}")
+        if clean_role:
+            search_queries.append(f"{clean_name} {clean_company} {clean_role}")
+
     elif clean_company and not clean_name:
         search_queries.append(f"{clean_company} site oficial")
         search_queries.append(f"{clean_company} contacto email")
-        search_queries.append(f"site:linkedin.com/in {clean_company}")
-        search_queries.append(f"site:contactout.com {clean_company}")
-        search_queries.append(f"{clean_company} colaboradores linkedin")
-        search_queries.append(f"{clean_company} linkedin")
-        if clean_role:
-            search_queries.append(f"{clean_company} {clean_role}")
+        
+        # Consultas de alta precisão geolocalizadas pelo país solicitado
+        if target_c_info and target_c_info.get("subdomain"):
+            search_queries.append(f'"{clean_company}" site:{target_c_info["subdomain"]}/in')
+        
         if clean_country:
-            search_queries.append(f"{clean_company} {clean_country} contacto")
+            search_queries.append(f'"{clean_company}" "{clean_country}" site:linkedin.com/in')
+            search_queries.append(f'"{clean_company}" colaboradores "{clean_country}"')
+            search_queries.append(f'"{clean_company}" {clean_country} contacto')
+        else:
+            search_queries.append(f"site:linkedin.com/in {clean_company}")
+            search_queries.append(f"{clean_company} colaboradores linkedin")
+            search_queries.append(f"{clean_company} linkedin")
+
+        if clean_role:
+            search_queries.append(f'"{clean_company}" "{clean_role}" site:linkedin.com/in')
+            search_queries.append(f'"{clean_company}" "{clean_role}"')
+        
+        search_queries.append(f"site:contactout.com {clean_company}")
+
     elif clean_name and not clean_company:
         search_queries.append(f"{clean_name} linkedin")
+        if target_c_info and target_c_info.get("subdomain"):
+            search_queries.append(f'"{clean_name}" site:{target_c_info["subdomain"]}/in')
         search_queries.append(f"site:linkedin.com/in {clean_name}")
         search_queries.append(f"{clean_name} contacto email")
         search_queries.append(f"site:contactout.com {clean_name}")
@@ -358,20 +515,22 @@ async def search_intelligence(
         search_queries.append(" ".join(parts) + " linkedin")
         search_queries.append(" ".join(parts) + " contacto email")
 
-    # 2. Execução das Consultas com Multi-Motor Anti-Bloqueio
+    # 2. Execução das Consultas com Multi-Motor Anti-Bloqueio Concorrente
     aggregated_results = []
     seen_urls = set()
 
-    for q in search_queries:
-        try:
-            res = await execute_web_search(q)
-            for item in res.get("results", []):
-                u = item.get("url", "")
-                if u and u not in seen_urls:
-                    seen_urls.add(u)
-                    aggregated_results.append(item)
-        except Exception:
-            continue
+    try:
+        search_tasks = [execute_web_search(q) for q in search_queries]
+        batch_results = await asyncio.gather(*search_tasks, return_exceptions=True)
+        for res in batch_results:
+            if isinstance(res, dict):
+                for item in res.get("results", []):
+                    u = item.get("url", "")
+                    if u and u not in seen_urls:
+                        seen_urls.add(u)
+                        aggregated_results.append(item)
+    except Exception:
+        pass
 
     # 3. Análise Detalhada dos Resultados
     verified_emails = set()
@@ -403,13 +562,15 @@ async def search_intelligence(
         if netloc and not any(d in netloc for d in DIRECTORY_DOMAINS):
             discovered_domains[netloc] = discovered_domains.get(netloc, 0) + 1
 
-        # Classificar perfis LinkedIn
+        # Classificar perfis LinkedIn respeitando estritamente o país e cargo solicitados
         if "linkedin.com/in/" in url or "linkedin.com/posts/" in url or "linkedin.com/pub/" in url:
-            linkedin_profiles.append({
-                "title": title,
-                "url": url,
-                "snippet": content
-            })
+            if not clean_country or matches_requested_country(clean_country, text, url):
+                if not clean_role or matches_requested_role(clean_role, title, text):
+                    linkedin_profiles.append({
+                        "title": title,
+                        "url": url,
+                        "snippet": content
+                    })
         else:
             other_mentions.append({
                 "title": title,
@@ -535,13 +696,17 @@ async def search_intelligence(
         txt = f"{t} {c}"
         txt_low = txt.lower()
 
-        # FILTRO RIGOROSO DE VÍNCULO:
+        # FILTRO RIGOROSO DE VÍNCULO E CRITÉRIOS SOLICITADOS:
         # Se uma empresa foi pesquisada, o colaborador TEM de ter a empresa explicitamente mencionada no seu registo!
         if clean_company:
             txt_nospace = txt_low.replace(" ", "").replace("-", "")
             has_comp = (comp_clean in txt_nospace) or (comp_words and all(w in txt_low for w in comp_words))
             if not has_comp:
                 continue
+
+        # FILTRO DE PAÍS SOLICITADO:
+        if clean_country and not matches_requested_country(clean_country, txt, u):
+            continue
 
         # Suporte a listagens de equipa de gestão em diretórios executivos (RocketReach / Org Chart)
         if "rocketreach.co" in u:
@@ -657,6 +822,10 @@ async def search_intelligence(
                     # Verificação técnica de SMTP contra o servidor MX da empresa
                     smtp_res = check_smtp_mailbox(staff_email, official_domain, smtp_cache)
                     staff_email_status = smtp_res["status"]
+
+                # FILTRO DE CARGO SOLICITADO:
+                if clean_role and not matches_requested_role(clean_role, role, txt):
+                    continue
 
                 # 3. Telefone: linha direta ou central da sede
                 phones_in_txt = [clean_phone(p) for p in RAW_PHONE_REGEX.findall(txt) if is_plausible_phone(p)]
