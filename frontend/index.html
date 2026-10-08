@@ -62,7 +62,7 @@
             <h1 class="font-bold text-lg text-white tracking-wide">NetContactos</h1>
             <span class="text-[10px] uppercase font-semibold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Online</span>
           </div>
-          <p class="text-xs text-zinc-400">Sherlock • Maigret • SearXNG • Web Scraper</p>
+          <p class="text-xs text-zinc-400">Pessoas & Empresas • Sherlock • Maigret • SearXNG • Scraper</p>
         </div>
       </div>
 
@@ -80,7 +80,11 @@
 
     <!-- Tabs Navigation -->
     <div class="flex flex-wrap gap-2 border-b border-zinc-800 pb-3">
-      <button onclick="switchTab('username')" id="tab-btn-username" class="tab-btn px-4 py-2 rounded-lg text-sm font-medium flex items-center space-x-2 bg-indigo-600 text-white shadow-md shadow-indigo-600/20 transition">
+      <button onclick="switchTab('people')" id="tab-btn-people" class="tab-btn px-4 py-2 rounded-lg text-sm font-medium flex items-center space-x-2 bg-indigo-600 text-white shadow-md shadow-indigo-600/20 transition">
+        <i class="fa-solid fa-user-tie"></i>
+        <span>Pesquisa de Pessoas & Empresas</span>
+      </button>
+      <button onclick="switchTab('username')" id="tab-btn-username" class="tab-btn px-4 py-2 rounded-lg text-sm font-medium flex items-center space-x-2 bg-zinc-900 text-zinc-400 hover:text-white hover:bg-zinc-800 transition">
         <i class="fa-solid fa-user-astronaut"></i>
         <span>Pesquisa de Username (OSINT)</span>
       </button>
@@ -98,8 +102,71 @@
       </button>
     </div>
 
-    <!-- TAB 1: PESQUISA DE USERNAME -->
-    <div id="tab-content-username" class="tab-pane space-y-6">
+    <!-- TAB 1: PESQUISA DE PESSOAS & EMPRESAS (NOVO PRINCIPAL) -->
+    <div id="tab-content-people" class="tab-pane space-y-6">
+      
+      <!-- Input Card -->
+      <div class="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-6 shadow-xl backdrop-blur">
+        <div class="mb-4">
+          <h2 class="text-base font-bold text-white flex items-center space-x-2">
+            <i class="fa-solid fa-id-badge text-indigo-400"></i>
+            <span>Localizar Profissional, Empresa & Contactos</span>
+          </h2>
+          <p class="text-xs text-zinc-400 mt-1">Investigue qualquer pessoa no mundo: descubra perfis de LinkedIn, menções corporativas, cargos e obtenha os emails profissionais prováveis.</p>
+        </div>
+
+        <form id="person-form" onsubmit="startPersonSearch(event)" class="space-y-4">
+          <div class="grid grid-cols-1 md:grid-cols-12 gap-4">
+            
+            <div class="md:col-span-5">
+              <label class="block text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-2">
+                <i class="fa-solid fa-user text-indigo-400 mr-1"></i> Nome Completo da Pessoa *
+              </label>
+              <input type="text" id="person-name-input" required placeholder="ex: Paula Gracia" 
+                     class="w-full px-4 py-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-white placeholder-zinc-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition text-sm">
+            </div>
+
+            <div class="md:col-span-4">
+              <label class="block text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-2">
+                <i class="fa-solid fa-building text-indigo-400 mr-1"></i> Empresa / Organização
+              </label>
+              <input type="text" id="person-company-input" placeholder="ex: Siemens, Galp, Alegria Activity" 
+                     class="w-full px-4 py-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-white placeholder-zinc-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition text-sm">
+            </div>
+
+            <div class="md:col-span-3 flex items-end">
+              <button type="submit" id="btn-search-person" class="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-medium text-sm transition flex items-center justify-center space-x-2 shadow-lg shadow-indigo-600/25">
+                <i class="fa-solid fa-magnifying-glass"></i>
+                <span>Investigar Pessoa</span>
+              </button>
+            </div>
+
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-12 gap-4 pt-1">
+            <div class="md:col-span-6">
+              <label class="block text-[11px] font-medium text-zinc-500 mb-1">Cargo / Especialidade (Opcional)</label>
+              <input type="text" id="person-role-input" placeholder="ex: Brand Manager, Marketing, Diretora, Engenheiro" 
+                     class="w-full px-3 py-1.5 bg-zinc-950/70 border border-zinc-800 rounded-lg text-white text-xs placeholder-zinc-600 focus:outline-none focus:border-indigo-500">
+            </div>
+            <div class="md:col-span-6">
+              <label class="block text-[11px] font-medium text-zinc-500 mb-1">País ou Cidade (Opcional)</label>
+              <input type="text" id="person-country-input" placeholder="ex: Espanha, Portugal, Barcelona, Lisboa" 
+                     class="w-full px-3 py-1.5 bg-zinc-950/70 border border-zinc-800 rounded-lg text-white text-xs placeholder-zinc-600 focus:outline-none focus:border-indigo-500">
+            </div>
+          </div>
+        </form>
+      </div>
+
+      <!-- Person Results Container -->
+      <div id="person-results-container" class="hidden space-y-6">
+        <!-- Renderizado dinamicamente -->
+      </div>
+
+    </div>
+
+    <!-- TAB 2: PESQUISA DE USERNAME -->
+    <div id="tab-content-username" class="tab-pane hidden space-y-6">
       
       <!-- Input Card -->
       <div class="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-6 shadow-xl backdrop-blur">
@@ -110,7 +177,7 @@
               <label class="block text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-2">Username Alvo</label>
               <div class="relative">
                 <span class="absolute inset-y-0 left-0 flex items-center pl-3.5 text-zinc-500 font-mono">@</span>
-                <input type="text" id="username-input" required placeholder="ex: torvalds, elonmusk, johndoe" 
+                <input type="text" id="username-input" oninput="checkUsernameInput(this.value)" required placeholder="ex: torvalds, elonmusk, paulagracia" 
                        class="w-full pl-9 pr-4 py-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-white placeholder-zinc-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition text-sm">
               </div>
             </div>
@@ -132,6 +199,17 @@
               </button>
             </div>
 
+          </div>
+
+          <!-- Smart Warning Banner for Full Names with spaces -->
+          <div id="username-name-warning" class="hidden p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-300 flex items-center justify-between">
+            <div class="flex items-center space-x-2">
+              <i class="fa-solid fa-circle-exclamation text-amber-400"></i>
+              <span>Detetámos que escreveu um nome próprio com espaços. Usernames em redes sociais não têm espaços.</span>
+            </div>
+            <button type="button" onclick="switchToPeopleSearchFromUsername()" class="px-3 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 rounded-lg text-xs font-medium transition">
+              Mudar para "Pessoas & Empresas" →
+            </button>
           </div>
         </form>
 
@@ -172,20 +250,20 @@
         </div>
       </div>
 
-      <!-- Results Grid -->
-      <div id="username-results-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-        <!-- Cards adicionados dinamicamente via JS -->
+      <!-- Empty State -->
+      <div id="username-empty-state" class="text-center py-12 text-zinc-500 space-y-3">
+        <i class="fa-solid fa-magnifying-glass-arrow-right text-4xl text-zinc-600"></i>
+        <p class="text-sm">Insira um username acima para iniciar a varredura nas redes sociais.</p>
       </div>
 
-      <div id="username-empty-state" class="text-center py-12 border border-dashed border-zinc-800 rounded-2xl">
-        <i class="fa-solid fa-fingerprint text-4xl text-zinc-700 mb-3"></i>
-        <p class="text-sm text-zinc-400 font-medium">Nenhuma pesquisa ativa</p>
-        <p class="text-xs text-zinc-600 mt-1">Insere um username acima para iniciar a varredura OSINT em tempo real.</p>
+      <!-- Results Grid -->
+      <div id="username-results-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <!-- Renderizado dinamicamente -->
       </div>
 
     </div>
 
-    <!-- TAB 2: BUSCA WEB (SEARXNG) -->
+    <!-- TAB 3: BUSCA WEB (SEARXNG) -->
     <div id="tab-content-searxng" class="tab-pane hidden space-y-6">
       
       <div class="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-6 shadow-xl backdrop-blur">
@@ -193,8 +271,8 @@
           <div class="grid grid-cols-1 md:grid-cols-12 gap-4">
             
             <div class="md:col-span-8">
-              <label class="block text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-2">Busca na Web (Nome, Email, Domínio, Palavra-chave)</label>
-              <input type="text" id="web-query-input" required placeholder="ex: João Silva lisboa, nome@empresa.com, site:linkedin.com joao" 
+              <label class="block text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-2">Termo de Pesquisa, Nome ou Palavras-Chave</label>
+              <input type="text" id="web-query-input" required placeholder="ex: 'Paula Gracia' Siemens, Carlos Galp email, etc." 
                      class="w-full px-4 py-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-white placeholder-zinc-500 focus:outline-none focus:border-indigo-500 text-sm">
             </div>
 
@@ -226,7 +304,7 @@
 
     </div>
 
-    <!-- TAB 3: EXTRATOR DE CONTACTOS & SCRAPING -->
+    <!-- TAB 4: EXTRATOR DE CONTACTOS & SCRAPING -->
     <div id="tab-content-scraper" class="tab-pane hidden space-y-6">
       
       <div class="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-6 shadow-xl backdrop-blur">
@@ -257,7 +335,7 @@
 
     </div>
 
-    <!-- TAB 4: ESTADO DO SISTEMA -->
+    <!-- TAB 5: ESTADO DO SISTEMA -->
     <div id="tab-content-system" class="tab-pane hidden space-y-6">
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div class="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-6">
@@ -266,6 +344,10 @@
             <span>Motores Disponíveis</span>
           </h3>
           <ul class="space-y-3 text-sm" id="system-engines-list">
+            <li class="flex items-center justify-between border-b border-zinc-800/80 pb-2">
+              <span class="text-zinc-400">Investigação Pessoas & Empresas</span>
+              <span class="text-emerald-400 font-mono">Pronto</span>
+            </li>
             <li class="flex items-center justify-between border-b border-zinc-800/80 pb-2">
               <span class="text-zinc-400">Motor Rápido Assíncrono (Top 25)</span>
               <span class="text-emerald-400 font-mono">Disponível</span>
@@ -297,7 +379,7 @@
           <div class="space-y-3 text-sm text-zinc-300">
             <p><span class="text-zinc-500">Framework:</span> FastAPI com Streaming SSE</p>
             <p><span class="text-zinc-500">Rate Limiter:</span> SlowAPI (Proteção contra bloqueios de IP)</p>
-            <p><span class="text-zinc-500">Cache:</span> In-Memory TTL Store (com suporte a Redis)</p>
+            <p><span class="text-zinc-500">Cache:</span> In-Memory TTL Store</p>
             <p><span class="text-zinc-500">Endpoints:</span> <a href="/docs" target="_blank" class="text-indigo-400 underline">Consultar documentação OpenAPI</a></p>
           </div>
         </div>

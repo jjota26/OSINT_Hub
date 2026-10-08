@@ -11,7 +11,7 @@ from pathlib import Path
 from app.core.ssl_patch import apply_ssl_fix
 from app.core.config import settings
 from app.core.limiter import limiter
-from app.routers import username, web_search, scraper, system
+from app.routers import username, web_search, scraper, system, people
 
 # Corrige certificados SSL antes de qualquer requisição de rede
 apply_ssl_fix()
@@ -42,6 +42,7 @@ app.add_middleware(
 )
 
 # Routers da API
+app.include_router(people.router)
 app.include_router(username.router)
 app.include_router(web_search.router)
 app.include_router(scraper.router)

@@ -10,16 +10,24 @@ from app.core.config import settings
 
 router = APIRouter(prefix="/api/username", tags=["Username OSINT"])
 
+def sanitize_username(user: str) -> str:
+    clean = user.strip().lstrip("@")
+    if " " in clean:
+        clean = clean.replace(" ", "").lower()
+    return clean
+
 @router.get("/quick/{username}")
 @limiter.limit(settings.RATE_LIMIT_OSINT)
 async def check_quick(request: Request, username: str):
     """Verificação ultrarrápida (2-4s) nas principais redes sociais."""
+    clean_user = sanitize_username(username)
     results = []
-    async for item in stream_quick_check(username):
+    async for item in stream_quick_check(clean_user):
         if item.get("found"):
             results.append(item)
     return {
-        "username": username,
+        "username": clean_user,
+        "original_query": username,
         "engine": "QuickChecker",
         "total_found": len(results),
         "results": results
@@ -33,29 +41,34 @@ async def stream_search(
     engine: str = Query("all", description="quick, sherlock, maigret, ou all")
 ):
     """Endpoint de Server-Sent Events (SSE) para enviar resultados em tempo real sem timeout."""
+    clean_user = sanitize_username(username)
+
     async def event_generator():
-        yield f"data: {json.dumps({'type': 'init', 'username': username, 'engine': engine})}\n\n"
+        yield f"data: {json.dumps({'type': 'init', 'username': clean_user, 'engine': engine, 'original': username})}\n\n"
+
+        if clean_user != username.strip().lstrip("@"):
+            yield f"data: {json.dumps({'type': 'notice', 'message': f'Nome formatado automaticamente para o username válido @{clean_user}'})}\n\n"
 
         # 1. Se engine for 'quick' ou 'all', executa primeiro a verificação rápida (instantânea)
         if engine in ("quick", "all"):
             yield f"data: {json.dumps({'type': 'stage', 'message': 'A verificar redes prioritárias...'})}\n\n"
-            async for item in stream_quick_check(username):
+            async for item in stream_quick_check(clean_user):
                 if item.get("found"):
                     yield f"data: {json.dumps({'type': 'found', 'site': item['site'], 'category': item['category'], 'url': item['url'], 'engine': 'QuickScan'})}\n\n"
 
         # 2. Se for 'sherlock' ou 'all'
         if engine in ("sherlock", "all"):
             yield f"data: {json.dumps({'type': 'stage', 'message': 'A iniciar varredura profunda Sherlock (400+ plataformas)...'})}\n\n"
-            async for item in stream_sherlock(username):
+            async for item in stream_sherlock(clean_user):
                 yield f"data: {json.dumps(item)}\n\n"
 
         # 3. Se for 'maigret'
         elif engine == "maigret":
             yield f"data: {json.dumps({'type': 'stage', 'message': 'A iniciar varredura Maigret...'})}\n\n"
-            async for item in stream_maigret(username):
+            async for item in stream_maigret(clean_user):
                 yield f"data: {json.dumps(item)}\n\n"
 
-        yield f"data: {json.dumps({'type': 'completed', 'username': username})}\n\n"
+        yield f"data: {json.dumps({'type': 'completed', 'username': clean_user})}\n\n"
 
     return StreamingResponse(
         event_generator(),
