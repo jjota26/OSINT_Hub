@@ -2,7 +2,7 @@
 
 - **Nome do Projeto:** NetContactos (Plataforma de Investigação, Localização e OSINT)
 - **Autor e Proprietário:** José Centúrio
-- **Data de Criação:** 08/10/2026
+- **Data de Atualização:** 08/10/2026 19:30
 - **Estado do Sistema:** ✅ 100% Operacional, Online e Conectado Globalmente
 
 ---
@@ -35,30 +35,21 @@
 
 ## 🛠️ Arquitetura Técnica e Módulos
 
-### 1. Backend (FastAPI + Python 3.14)
-- **Framework:** FastAPI assíncrono com Uvicorn.
-- **Resolução SSL:** `app/core/ssl_patch.py` (corrige certificados SSL no Windows com `certifi` e `truststore`).
-- **Rate Limiting:** `app/core/limiter.py` (SlowAPI prevenindo bloqueios de IP).
-- **Cache:** `app/core/cache.py` (Cache em memória com TTL).
+### 1. Novo Motor: Pesquisa de Pessoas & Empresas (`/api/person/search`)
+- **Ficheiros:** `app/services/people_service.py` e `app/routers/people.py`
+- **Capacidades:**
+  - Localiza perfis profissionais no **LinkedIn**, **CVs**, redes empresariais e diretórios com excertos da carreira.
+  - Extrai emails reais presentes nas páginas públicas.
+  - Gera **previsões de emails corporativos** (`nome.apelido@empresa.com`, `napelido@empresa.com`, etc.) com botão de cópia com 1 clique.
+  - Recolhe menções em notícias, comunicados e páginas oficiais da empresa.
+  - Gera variações de username para testar nas redes sociais.
 
-### 2. Motores de Investigação
-- **QuickScan (`app/services/quick_checker.py`):**
-  - Varredura assíncrona nas 25 maiores redes (GitHub, Reddit, Telegram, Steam, Twitch, GitLab, etc.) em 2 a 4 segundos.
-- **Sherlock (`app/services/sherlock_service.py`):**
-  - Subprocesso assíncrono para 400+ plataformas com streaming SSE (`/api/username/stream/{user}?engine=sherlock`).
-- **Maigret (`app/services/maigret_service.py`):**
-  - Subprocesso assíncrono cobrindo 6000+ plataformas com ranking de tráfego.
-- **SearXNG & Meta-Busca Web (`app/services/searxng_service.py`):**
-  - Conecta-se ao SearXNG local (`http://localhost:8080`) com fallback inteligente para DuckDuckGo e instâncias públicas seguras.
-- **Scraper de Contactos (`app/services/scraper_service.py`):**
-  - Extrai emails, telemóveis/telefones e redes sociais vinculadas em qualquer URL.
+### 2. Correção de Conexão Web & Portas Cloudflare
+- **Causa Raiz Identificada:** O `app.js` antigo forçava a porta `:8000` quando acedido pelo domínio `sigec-pro.com`. Como a Cloudflare apenas aceita a porta padrão 443 (HTTPS), o browser ficava eternamente bloqueado em *"A conectar ao motor de varredura..."*.
+- **Solução Implementada:** `API_BASE = ''` (URL relativo). O tráfego passa na porta 443 normal para o Centauro (`server.js`), que faz proxy reverso transparente para o FastAPI na porta 8000.
+- **Cache-Buster & Headers:** Atualizado `app.js?v=20261008_2` e adicionados cabeçalhos `Cache-Control: no-cache` em `server.js`.
 
-### 3. Frontend Reativo
-- **Dashboard Web SPA:** `frontend/index.html` e `frontend/app.js` servido na raiz.
-- **Design:** Tema escuro moderno com Tailwind CSS.
-- **Comunicação em Tempo Real:** Server-Sent Events (SSE) com preenchimento progressivo de resultados sem recarregar a página.
-- **Exportação:** Exportação dos dados encontrados para JSON e CSV.
-
-### 4. Infraestrutura de Rede
-- **Cloudflare Tunnel (`cloudflared`):** Rota DNS automática `netcontactos.sigec-pro.com`.
-- **Servidor Centauro (`Z:\Nuvem_Hosting\server\server.js`):** Virtual Host dedicado encaminhando `/api` e o frontend na raiz para a porta 8000.
+### 3. Blindagem da Aba de Username
+- **Deteção de Nomes com Espaço:** Se o utilizador escrever um nome como `Paula Gracia`, o sistema:
+  - Exibe um alerta inteligente sugerindo a nova aba "Pessoas & Empresas".
+  - Higieniza automaticamente o username para `@paulagracia` sem crashar nem bloquear a pesquisa.
