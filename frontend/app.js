@@ -130,6 +130,7 @@ function renderPersonResults(data) {
   const hasMentions = data.web_mentions && data.web_mentions.length > 0;
   const hasDomain = Boolean(data.official_domain);
   const mxInfo = data.domain_mx || {};
+  const hasStaff = data.company_staff && data.company_staff.length > 0;
 
   let mainTitle = data.target_name || data.target_company || data.target_role || 'Resultado da Investigação';
   let subtitleParts = [];
@@ -195,6 +196,93 @@ function renderPersonResults(data) {
         </div>
       ` : ''}
     </div>
+
+    <!-- Colaboradores & Equipa Identificados nas Redes Sociais (LinkedIn & Diretórios) -->
+    ${hasStaff ? `
+      <div class="bg-gradient-to-r from-zinc-900 via-zinc-900/90 to-zinc-950 border border-zinc-800 rounded-2xl p-6 space-y-4 shadow-xl">
+        <div class="flex items-center justify-between border-b border-zinc-800/80 pb-3">
+          <div class="flex items-center space-x-3">
+            <div class="w-9 h-9 rounded-xl bg-sky-500/10 border border-sky-500/20 text-sky-400 flex items-center justify-center text-base">
+              <i class="fa-solid fa-users"></i>
+            </div>
+            <div>
+              <h4 class="text-sm font-bold text-white flex items-center space-x-2">
+                <span>Colaboradores & Equipa Identificados</span>
+                <span class="px-2 py-0.5 rounded-full text-[10px] bg-sky-500/10 text-sky-400 border border-sky-500/20 font-mono">Redes Sociais & LinkedIn</span>
+              </h4>
+              <p class="text-xs text-zinc-400">Pessoas afiliadas com emails em uso / padrão corporativo e contacto telefónico</p>
+            </div>
+          </div>
+          <span class="px-2.5 py-1 rounded-lg bg-zinc-800 text-sky-400 font-mono text-xs font-bold border border-zinc-700">
+            ${data.company_staff.length} colaboradores
+          </span>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          ${data.company_staff.map(member => {
+            const initials = member.name.split(' ').filter(Boolean).slice(0, 2).map(n => n[0].toUpperCase()).join('') || 'U';
+            const isDirectEmail = member.email_status && member.email_status.includes('Verificado');
+            return `
+              <div class="bg-zinc-950/80 border border-zinc-800 hover:border-zinc-700 rounded-xl p-4 flex flex-col justify-between space-y-3 transition group">
+                <div class="space-y-2">
+                  <div class="flex items-start justify-between">
+                    <div class="flex items-center space-x-3 min-w-0">
+                      <div class="w-10 h-10 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-300 flex items-center justify-center font-bold text-xs group-hover:border-sky-500/40 group-hover:text-sky-400 transition shrink-0">
+                        ${initials}
+                      </div>
+                      <div class="min-w-0">
+                        <h5 class="text-xs font-bold text-white group-hover:text-sky-300 transition leading-tight truncate">${member.name}</h5>
+                        <span class="text-[11px] text-zinc-400 block truncate">${member.role || 'Colaborador'}</span>
+                      </div>
+                    </div>
+                    ${member.profile_url ? `
+                      <a href="${member.profile_url}" target="_blank" rel="noopener noreferrer" class="text-sky-400 hover:text-sky-300 text-xs p-1.5 bg-sky-950/30 border border-sky-500/20 rounded-lg hover:border-sky-500/40 transition shrink-0 ml-2" title="Ver perfil no ${member.platform || 'LinkedIn'}">
+                        <i class="${member.platform === 'ContactOut' ? 'fa-solid fa-address-book' : 'fa-brands fa-linkedin'}"></i>
+                      </a>
+                    ` : ''}
+                  </div>
+
+                  <!-- Email -->
+                  ${member.email ? `
+                    <div class="pt-2 border-t border-zinc-900 flex items-center justify-between">
+                      <div class="min-w-0 pr-2">
+                        <span class="text-[9px] uppercase font-bold tracking-wider ${isDirectEmail ? 'text-emerald-400' : 'text-indigo-400'} block">
+                          <i class="fa-solid fa-envelope mr-1"></i>${member.email_status || 'Email Corporativo'}
+                        </span>
+                        <span class="text-xs font-mono font-medium text-zinc-200 truncate block select-all">${member.email}</span>
+                      </div>
+                      <button onclick="copyToClipboard('${member.email}', this)" class="p-1.5 px-2 bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white rounded-lg text-xs transition shrink-0" title="Copiar Email">
+                        <i class="fa-regular fa-copy text-[10px]"></i>
+                      </button>
+                    </div>
+                  ` : ''}
+
+                  <!-- Telefone -->
+                  ${member.phone && member.phone !== 'N/D' ? `
+                    <div class="pt-2 border-t border-zinc-900 flex items-center justify-between">
+                      <div class="min-w-0 pr-2">
+                        <span class="text-[9px] uppercase font-bold tracking-wider text-emerald-400 block">
+                          <i class="fa-solid fa-phone mr-1"></i>${member.phone_type || 'Telefone'}
+                        </span>
+                        <span class="text-xs font-mono font-medium text-zinc-200 truncate block select-all">${member.phone}</span>
+                      </div>
+                      <div class="flex items-center space-x-1 shrink-0">
+                        <a href="tel:${member.phone.replace(/\s+/g, '')}" class="p-1.5 px-2 bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white rounded-lg text-xs transition" title="Ligar">
+                          <i class="fa-solid fa-phone text-[10px]"></i>
+                        </a>
+                        <button onclick="copyToClipboard('${member.phone}', this)" class="p-1.5 px-2 bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white rounded-lg text-xs transition" title="Copiar Telefone">
+                          <i class="fa-regular fa-copy text-[10px]"></i>
+                        </button>
+                      </div>
+                    </div>
+                  ` : ''}
+                </div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      </div>
+    ` : ''}
 
     <!-- Contactos de Alta Exatidão -->
     <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">

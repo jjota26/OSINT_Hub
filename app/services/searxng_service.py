@@ -1,5 +1,6 @@
 import urllib.parse
 import base64
+import re
 import httpx
 from bs4 import BeautifulSoup
 from typing import List, Dict, Any
@@ -56,6 +57,40 @@ async def search_brave_cffi(query: str) -> List[Dict[str, Any]]:
                         "content": desc,
                         "engine": "brave",
                         "source": "brave_cffi"
+                    })
+    except Exception:
+        pass
+    return results[:20]
+
+async def search_yahoo_cffi(query: str) -> List[Dict[str, Any]]:
+    """Consulta o Yahoo Search com personificação TLS Chrome e descodificação de URLs /RU=."""
+    if not HAS_CURL_CFFI:
+        return []
+    url = f"https://search.yahoo.com/search?p={urllib.parse.quote(query)}"
+    results = []
+    try:
+        res = cffi_requests.get(url, impersonate="chrome120", verify=False, timeout=6.5)
+        if res.status_code == 200:
+            soup = BeautifulSoup(res.text, "html.parser")
+            for li in soup.find_all(["li", "div"], class_=re.compile(r"\balgo\b")):
+                a = li.find("a", href=re.compile(r"/RU="))
+                if a:
+                    m = re.search(r"/RU=(.*?)/RK=", a["href"])
+                    clean_url = urllib.parse.unquote(m.group(1)) if m else a["href"]
+                    title = a.get_text(strip=True)
+                    # Limpa prefixos do Yahoo tipo "LinkedInhttps://..."
+                    if "http" in title:
+                        title_clean = title.split("http")[0].strip() or title
+                    else:
+                        title_clean = title
+                    sn_elem = li.find(["p", "div"], class_=re.compile(r"compText|lh-16|abstract"))
+                    content = sn_elem.get_text(strip=True) if sn_elem else ""
+                    results.append({
+                        "title": title_clean,
+                        "url": clean_url,
+                        "content": content,
+                        "engine": "yahoo",
+                        "source": "yahoo_cffi"
                     })
     except Exception:
         pass
@@ -207,14 +242,21 @@ async def execute_web_search(query: str, categories: str = "general") -> Dict[st
             seen_urls.add(r["url"])
             results.append(r)
 
-    # 3. DuckDuckGo (snippets e diretórios ricos)
+    # 3. Yahoo Search (Excelente para LinkedIn, diretórios e perfis)
+    yahoo_res = await search_yahoo_cffi(query)
+    for r in yahoo_res:
+        if r["url"] not in seen_urls:
+            seen_urls.add(r["url"])
+            results.append(r)
+
+    # 4. DuckDuckGo (snippets e diretórios ricos)
     ddg_res = await search_duckduckgo_cffi(query)
     for r in ddg_res:
         if r["url"] not in seen_urls:
             seen_urls.add(r["url"])
             results.append(r)
 
-    # 4. Se ainda houver poucos resultados (< 4), complementa com Bing
+    # 5. Se ainda houver poucos resultados (< 4), complementa com Bing
     if len(results) < 4:
         bing_res = await search_bing_fallback(query)
         for r in bing_res:
