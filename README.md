@@ -1,4 +1,4 @@
-# 🛰️ OSINT Hub — Plataforma de Investigação e OSINT
+# 🛰️ NetContactos — Plataforma de Investigação e OSINT
 
 Plataforma completa de inteligência de fontes abertas (OSINT) construída em **FastAPI**, com integração de **Sherlock**, **Maigret**, **SearXNG** e **Web Scraper**, desenhada para ser assíncrona, escalável e 100% gratuita.
 

@@ -20,7 +20,7 @@ import uvicorn
 
 if __name__ == "__main__":
     print("=" * 60)
-    print("          INICIANDO OSINT HUB (FastAPI + Sherlock)          ")
+    print("          INICIANDO NETCONTACTOS (FastAPI + Sherlock)       ")
     print("=" * 60)
     print(" Dashboard Web: http://localhost:8000")
     print(" Swagger Docs:  http://localhost:8000/docs")
