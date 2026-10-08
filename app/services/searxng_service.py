@@ -77,14 +77,12 @@ async def search_yahoo_cffi(query: str) -> List[Dict[str, Any]]:
                 if a:
                     m = re.search(r"/RU=(.*?)/RK=", a["href"])
                     clean_url = urllib.parse.unquote(m.group(1)) if m else a["href"]
-                    title = a.get_text(strip=True)
-                    # Limpa prefixos do Yahoo tipo "LinkedInhttps://..."
-                    if "http" in title:
-                        title_clean = title.split("http")[0].strip() or title
-                    else:
-                        title_clean = title
-                    sn_elem = li.find(["p", "div"], class_=re.compile(r"compText|lh-16|abstract"))
-                    content = sn_elem.get_text(strip=True) if sn_elem else ""
+                    h3 = li.find(["h3", "h4"])
+                    title_clean = h3.get_text(strip=True) if h3 else a.get_text(strip=True)
+                    if "http" in title_clean and not h3:
+                        title_clean = title_clean.split("http")[0].strip() or title_clean
+                    sn_elem = li.find(["div", "p"], class_=re.compile(r"\bcompText\b|abstract"))
+                    content = sn_elem.get_text(separator=" ", strip=True) if sn_elem else ""
                     results.append({
                         "title": title_clean,
                         "url": clean_url,

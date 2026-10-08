@@ -242,12 +242,15 @@ function renderPersonResults(data) {
                     ` : ''}
                   </div>
 
-                  <!-- Email -->
+                  <!-- Email com Verificação Técnica de Servidor MX -->
                   ${member.email ? `
                     <div class="pt-2 border-t border-zinc-900 flex items-center justify-between">
                       <div class="min-w-0 pr-2">
-                        <span class="text-[9px] uppercase font-bold tracking-wider ${isDirectEmail ? 'text-emerald-400' : 'text-indigo-400'} block">
-                          <i class="fa-solid fa-envelope mr-1"></i>${member.email_status || 'Email Corporativo'}
+                        <span class="text-[9px] uppercase font-bold tracking-wider ${
+                          (member.email_status && (member.email_status.includes('250 OK') || member.email_status.includes('Verificado'))) ? 'text-emerald-400' :
+                          (member.email_status && member.email_status.includes('MX')) ? 'text-sky-400' : 'text-indigo-400'
+                        } block">
+                          <i class="fa-solid ${(member.email_status && member.email_status.includes('MX')) ? 'fa-server' : 'fa-envelope'} mr-1"></i>${member.email_status || 'Email Corporativo'}
                         </span>
                         <span class="text-xs font-mono font-medium text-zinc-200 truncate block select-all">${member.email}</span>
                       </div>
