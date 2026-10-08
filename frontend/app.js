@@ -66,7 +66,12 @@ async function startPersonSearch(event) {
   const role = document.getElementById('person-role-input').value.trim();
   const country = document.getElementById('person-country-input').value.trim();
 
-  if (!name) return;
+  const alertBox = document.getElementById('person-form-alert');
+  if (!name && !company && !role && !country) {
+    if (alertBox) alertBox.classList.remove('hidden');
+    return;
+  }
+  if (alertBox) alertBox.classList.add('hidden');
 
   const btn = document.getElementById('btn-search-person');
   const container = document.getElementById('person-results-container');
@@ -74,26 +79,33 @@ async function startPersonSearch(event) {
   btn.disabled = true;
   btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i><span>A investigar na web...</span>`;
   container.classList.remove('hidden');
+  
+  const targetLabel = [name, company, role, country].filter(Boolean).join(' • ');
+
   container.innerHTML = `
     <div class="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-8 text-center space-y-4">
       <div class="inline-flex p-3 rounded-2xl bg-indigo-600/10 text-indigo-400 border border-indigo-500/20 pulsing">
         <i class="fa-solid fa-magnifying-glass text-2xl"></i>
       </div>
       <div>
-        <h3 class="text-base font-bold text-white">A investigar ${name}${company ? ' na ' + company : ''}...</h3>
-        <p class="text-xs text-zinc-400 mt-1">A consultar motores de busca, LinkedIn, bases públicas e a calcular probabilidades de emails.</p>
+        <h3 class="text-base font-bold text-white">A investigar ${targetLabel}...</h3>
+        <p class="text-xs text-zinc-400 mt-1">A detetar domínio oficial, servidores de correio MX, LinkedIn, diretórios e contactos em uso real.</p>
       </div>
     </div>
   `;
 
   try {
-    const params = new URLSearchParams({ name });
+    const params = new URLSearchParams();
+    if (name) params.append('name', name);
     if (company) params.append('company', company);
     if (role) params.append('role', role);
     if (country) params.append('country', country);
 
     const res = await fetch(`${API_BASE}/api/person/search?${params.toString()}`);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    if (!res.ok) {
+      const errJson = await res.json().catch(() => ({}));
+      throw new Error(errJson.detail || `Erro HTTP ${res.status}`);
+    }
     const data = await res.json();
     currentPersonData = data;
     renderPersonResults(data);
@@ -105,53 +117,210 @@ async function startPersonSearch(event) {
     `;
   } finally {
     btn.disabled = false;
-    btn.innerHTML = `<i class="fa-solid fa-magnifying-glass"></i><span>Investigar Pessoa</span>`;
+    btn.innerHTML = `<i class="fa-solid fa-magnifying-glass"></i><span>Investigar / Localizar</span>`;
   }
 }
 
 function renderPersonResults(data) {
   const container = document.getElementById('person-results-container');
   const hasLinkedIn = data.linkedin_profiles && data.linkedin_profiles.length > 0;
-  const hasEmails = data.predicted_emails && data.predicted_emails.length > 0;
+  const hasPersonEmails = data.person_emails && data.person_emails.length > 0;
+  const hasCompanyEmails = data.company_emails && data.company_emails.length > 0;
+  const hasPhones = data.phones && data.phones.length > 0;
   const hasMentions = data.web_mentions && data.web_mentions.length > 0;
-  const hasExtracted = data.extracted_emails && data.extracted_emails.length > 0;
+  const hasDomain = Boolean(data.official_domain);
+  const mxInfo = data.domain_mx || {};
+
+  let mainTitle = data.target_name || data.target_company || data.target_role || 'Resultado da Investigação';
+  let subtitleParts = [];
+  if (data.target_company && data.target_name) subtitleParts.push(`<i class="fa-solid fa-building text-indigo-400 mr-1"></i>${data.target_company}`);
+  if (data.target_role) subtitleParts.push(`<i class="fa-solid fa-briefcase text-zinc-400 mr-1"></i>${data.target_role}`);
+  if (data.target_country) subtitleParts.push(`<i class="fa-solid fa-location-dot text-zinc-400 mr-1"></i>${data.target_country}`);
 
   let html = `
-    <!-- Top Summary Card -->
-    <div class="bg-gradient-to-r from-zinc-900 to-zinc-900/80 border border-zinc-800 rounded-2xl p-6 flex flex-wrap items-center justify-between gap-4 shadow-xl">
-      <div class="flex items-center space-x-4">
-        <div class="w-12 h-12 rounded-xl bg-indigo-600/20 border border-indigo-500/30 text-indigo-400 flex items-center justify-center text-xl font-bold">
-          ${data.person_name.charAt(0).toUpperCase()}
+    <!-- Top Summary Card: Identificação & Domínio Oficial de Email -->
+    <div class="bg-gradient-to-r from-zinc-900 via-zinc-900/90 to-zinc-950 border border-zinc-800 rounded-2xl p-6 space-y-4 shadow-xl">
+      <div class="flex flex-wrap items-center justify-between gap-4">
+        <div class="flex items-center space-x-4">
+          <div class="w-12 h-12 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-600 text-white flex items-center justify-center text-xl font-bold shadow-lg shadow-indigo-600/20">
+            ${mainTitle.charAt(0).toUpperCase()}
+          </div>
+          <div>
+            <h3 class="text-lg font-bold text-white">${mainTitle}</h3>
+            <p class="text-xs text-zinc-400 flex flex-wrap items-center gap-3 mt-1">
+              ${subtitleParts.join(' ')}
+            </p>
+          </div>
         </div>
-        <div>
-          <h3 class="text-lg font-bold text-white">${data.person_name}</h3>
-          <p class="text-xs text-zinc-400 flex items-center space-x-2 mt-0.5">
-            ${data.company ? `<span><i class="fa-solid fa-building text-indigo-400 mr-1"></i>${data.company}</span>` : ''}
-            ${data.role ? `<span>• <i class="fa-solid fa-briefcase text-zinc-400 mr-1"></i>${data.role}</span>` : ''}
-          </p>
+        
+        <div class="flex items-center space-x-2 text-xs">
+          <span class="px-3 py-1.5 rounded-lg bg-zinc-800/90 text-zinc-300 font-mono border border-zinc-700/60">
+            <strong class="text-emerald-400">${data.total_sources || 0}</strong> fontes analisadas
+          </span>
         </div>
       </div>
-      <div class="flex items-center space-x-3 text-xs">
-        <span class="px-3 py-1.5 rounded-lg bg-zinc-800 text-zinc-300 font-mono">
-          <strong class="text-emerald-400">${data.total_mentions}</strong> referências web
-        </span>
-      </div>
+
+      <!-- Caixa do Domínio Corporativo Oficial & Servidores de Email -->
+      ${hasDomain ? `
+        <div class="pt-3 border-t border-zinc-800/80 grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div class="bg-zinc-950/80 p-3 rounded-xl border border-zinc-800 flex items-center justify-between">
+            <div>
+              <span class="text-[10px] uppercase font-bold text-zinc-500 block">Domínio Oficial da Empresa</span>
+              <a href="https://${data.official_domain}" target="_blank" rel="noopener noreferrer" class="text-xs font-mono font-semibold text-indigo-400 hover:underline">
+                ${data.official_domain}
+              </a>
+            </div>
+            <i class="fa-solid fa-globe text-zinc-600 text-sm"></i>
+          </div>
+
+          <div class="bg-zinc-950/80 p-3 rounded-xl border border-zinc-800 flex items-center justify-between">
+            <div>
+              <span class="text-[10px] uppercase font-bold text-zinc-500 block">Servidor de Correio (DNS MX)</span>
+              <span class="text-xs font-medium ${mxInfo.valid ? 'text-emerald-400' : 'text-zinc-400'}">
+                ${mxInfo.valid ? '<i class="fa-solid fa-shield-check mr-1 text-emerald-400"></i>' + (mxInfo.provider || 'Verificado') : 'Sem registo MX'}
+              </span>
+            </div>
+            <i class="fa-solid fa-server text-zinc-600 text-sm"></i>
+          </div>
+
+          <div class="bg-zinc-950/80 p-3 rounded-xl border border-zinc-800 flex items-center justify-between">
+            <div>
+              <span class="text-[10px] uppercase font-bold text-zinc-500 block">Formato Comprovado de Email</span>
+              <span class="text-xs font-mono text-zinc-200">
+                ${data.proven_pattern ? data.proven_pattern : '@' + data.official_domain}
+              </span>
+            </div>
+            <i class="fa-solid fa-signature text-zinc-600 text-sm"></i>
+          </div>
+        </div>
+      ` : ''}
     </div>
 
+    <!-- Contactos de Alta Exatidão -->
     <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
       
-      <!-- Coluna Esquerda: Perfis Profissionais & Menções -->
+      <!-- Coluna Esquerda: Emails em Uso & Telefones Oficiais -->
+      <div class="lg:col-span-5 space-y-6">
+        
+        <!-- Emails em Uso Real -->
+        <div class="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-6 space-y-4">
+          <div class="flex items-center justify-between">
+            <h4 class="text-xs uppercase font-bold tracking-wider text-zinc-400 flex items-center space-x-2">
+              <i class="fa-solid fa-envelope-circle-check text-emerald-400 text-sm"></i>
+              <span>Correios Eletrónicos em Uso</span>
+            </h4>
+            <span class="text-emerald-400 font-mono text-xs font-bold">
+              ${(data.person_emails || []).length + (data.company_emails || []).length}
+            </span>
+          </div>
+
+          <!-- Emails Diretos da Pessoa Alvo -->
+          ${hasPersonEmails ? `
+            <div class="space-y-2">
+              <span class="text-[11px] font-semibold text-emerald-400 flex items-center space-x-1">
+                <i class="fa-solid fa-circle-check text-[10px]"></i>
+                <span>Email Direto Verificado:</span>
+              </span>
+              ${data.person_emails.map(em => `
+                <div class="p-3 bg-emerald-950/20 border border-emerald-500/40 rounded-xl flex items-center justify-between">
+                  <div>
+                    <span class="font-mono text-xs font-semibold text-emerald-300 select-all block">${em.email}</span>
+                    <span class="text-[10px] text-emerald-400/80">${em.type || 'Email Direto'}</span>
+                  </div>
+                  <button onclick="copyToClipboard('${em.email}', this)" class="p-1.5 px-2.5 bg-emerald-900/40 hover:bg-emerald-800/60 rounded-lg text-emerald-300 transition text-xs flex items-center space-x-1" title="Copiar">
+                    <i class="fa-regular fa-copy"></i>
+                    <span>Copiar</span>
+                  </button>
+                </div>
+              `).join('')}
+            </div>
+          ` : ''}
+
+          <!-- Emails Oficiais da Empresa / Gerais -->
+          ${hasCompanyEmails ? `
+            <div class="space-y-2 pt-2">
+              <span class="text-[11px] font-semibold text-zinc-400 flex items-center space-x-1">
+                <i class="fa-solid fa-building text-[10px]"></i>
+                <span>Emails Oficiais da Empresa:</span>
+              </span>
+              <div class="space-y-1.5">
+                ${data.company_emails.map(em => `
+                  <div class="p-2.5 bg-zinc-950 rounded-xl border border-zinc-800 flex items-center justify-between hover:border-zinc-700 transition">
+                    <div>
+                      <span class="font-mono text-xs text-zinc-200 select-all block">${em.email}</span>
+                      <span class="text-[10px] text-zinc-500">${em.status || 'Verificado'}</span>
+                    </div>
+                    <button onclick="copyToClipboard('${em.email}', this)" class="p-1.5 px-2 bg-zinc-900 hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-white transition text-xs" title="Copiar">
+                      <i class="fa-regular fa-copy"></i>
+                    </button>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+          ` : ''}
+
+          ${!hasPersonEmails && !hasCompanyEmails ? `
+            <div class="p-4 bg-zinc-950/60 rounded-xl border border-zinc-800/60 text-xs text-zinc-500 text-center">
+              Nenhum correio eletrónico público detetado com estes termos exatos.
+              ${data.proven_pattern ? `<div class="mt-2 text-zinc-400">Padrão da empresa: <strong class="text-indigo-400 font-mono">${data.proven_pattern}</strong></div>` : ''}
+            </div>
+          ` : ''}
+        </div>
+
+        <!-- Telefones Oficiais & Linhas Diretas -->
+        <div class="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-6 space-y-4">
+          <div class="flex items-center justify-between">
+            <h4 class="text-xs uppercase font-bold tracking-wider text-zinc-400 flex items-center space-x-2">
+              <i class="fa-solid fa-phone text-indigo-400 text-sm"></i>
+              <span>Telefones em Uso & Linhas Diretas</span>
+            </h4>
+            <span class="text-indigo-400 font-mono text-xs font-bold">${(data.phones || []).length}</span>
+          </div>
+
+          <div class="space-y-2">
+            ${hasPhones ? data.phones.map(ph => `
+              <div class="p-3 bg-zinc-950 rounded-xl border border-zinc-800 flex items-center justify-between hover:border-indigo-500/40 transition">
+                <div class="flex items-center space-x-2.5">
+                  <i class="fa-solid fa-phone-volume text-emerald-400 text-xs"></i>
+                  <span class="font-mono text-xs text-zinc-200 font-semibold select-all">${ph}</span>
+                </div>
+                <div class="flex items-center space-x-1">
+                  <a href="tel:${ph.replace(/\s+/g, '')}" class="p-1.5 px-2 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white rounded-lg text-xs" title="Ligar">
+                    <i class="fa-solid fa-phone text-[10px]"></i>
+                  </a>
+                  <button onclick="copyToClipboard('${ph}', this)" class="p-1.5 px-2 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white rounded-lg text-xs" title="Copiar">
+                    <i class="fa-regular fa-copy text-[10px]"></i>
+                  </button>
+                </div>
+              </div>
+            `).join('') : '<p class="text-xs text-zinc-500 py-2">Nenhum contacto telefónico público indexado nestas fontes.</p>'}
+          </div>
+
+          <!-- Ação Rápida de Scraping -->
+          ${data.official_domain ? `
+            <div class="pt-3 border-t border-zinc-800/80">
+              <button onclick="launchScraperWithDomain('https://${data.official_domain}')" class="w-full py-2 px-3 bg-zinc-950 hover:bg-zinc-900 border border-zinc-800 hover:border-indigo-500/40 rounded-xl text-xs text-zinc-300 hover:text-white transition flex items-center justify-center space-x-2">
+                <i class="fa-solid fa-spider text-indigo-400"></i>
+                <span>Extrair Contactos Completos de ${data.official_domain}</span>
+              </button>
+            </div>
+          ` : ''}
+        </div>
+
+      </div>
+
+      <!-- Coluna Direita: Perfis Profissionais (LinkedIn) & Menções Oficiais -->
       <div class="lg:col-span-7 space-y-6">
         
-        <!-- LinkedIn e Perfis Profissionais -->
+        <!-- Perfis Profissionais do LinkedIn -->
         <div class="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-6 space-y-4">
-          <h4 class="text-xs uppercase font-bold tracking-wider text-zinc-400 flex items-center justify-between">
-            <span class="flex items-center space-x-2">
+          <div class="flex items-center justify-between">
+            <h4 class="text-xs uppercase font-bold tracking-wider text-zinc-400 flex items-center space-x-2">
               <i class="fa-brands fa-linkedin text-sky-400 text-base"></i>
               <span>Perfis Profissionais Detetados</span>
-            </span>
-            <span class="text-sky-400 font-mono">${data.linkedin_profiles.length}</span>
-          </h4>
+            </h4>
+            <span class="text-sky-400 font-mono text-xs font-bold">${(data.linkedin_profiles || []).length}</span>
+          </div>
 
           <div class="space-y-3">
             ${hasLinkedIn ? data.linkedin_profiles.map(p => `
@@ -160,28 +329,29 @@ function renderPersonResults(data) {
                   <h5 class="text-sm font-semibold text-white group-hover:text-sky-400 transition">
                     <a href="${p.url}" target="_blank" rel="noopener noreferrer">${p.title}</a>
                   </h5>
-                  <a href="${p.url}" target="_blank" rel="noopener noreferrer" class="text-zinc-500 hover:text-white text-xs pl-2">
-                    <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                  <a href="${p.url}" target="_blank" rel="noopener noreferrer" class="text-zinc-500 hover:text-white text-xs pl-2 flex items-center space-x-1">
+                    <span>Ver</span>
+                    <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
                   </a>
                 </div>
-                <p class="text-xs text-zinc-400 line-clamp-3">${p.snippet || 'Sem pré-visualização'}</p>
+                <p class="text-xs text-zinc-400 line-clamp-3">${p.snippet || 'Sem excerto de pré-visualização'}</p>
                 <div class="pt-1">
                   <span class="text-[11px] font-mono text-sky-400/80 truncate block">${p.url}</span>
                 </div>
               </div>
-            `).join('') : '<p class="text-xs text-zinc-500 py-3">Nenhum perfil direto do LinkedIn detetado com estes termos exatos.</p>'}
+            `).join('') : '<p class="text-xs text-zinc-500 py-3">Nenhum perfil direto do LinkedIn detetado com estes termos.</p>'}
           </div>
         </div>
 
-        <!-- Redes Sociais Gerais & Menções Web -->
+        <!-- Menções Oficiais na Web & Notícias -->
         <div class="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-6 space-y-4">
-          <h4 class="text-xs uppercase font-bold tracking-wider text-zinc-400 flex items-center justify-between">
-            <span class="flex items-center space-x-2">
-              <i class="fa-solid fa-globe text-indigo-400 text-sm"></i>
-              <span>Menções na Web & Notícias</span>
-            </span>
-            <span class="text-indigo-400 font-mono">${data.web_mentions.length}</span>
-          </h4>
+          <div class="flex items-center justify-between">
+            <h4 class="text-xs uppercase font-bold tracking-wider text-zinc-400 flex items-center space-x-2">
+              <i class="fa-solid fa-newspaper text-indigo-400 text-sm"></i>
+              <span>Menções na Web, Imprensa & Diretórios</span>
+            </h4>
+            <span class="text-indigo-400 font-mono text-xs font-bold">${(data.web_mentions || []).length}</span>
+          </div>
 
           <div class="space-y-3">
             ${hasMentions ? data.web_mentions.map(m => `
@@ -203,51 +373,20 @@ function renderPersonResults(data) {
 
       </div>
 
-      <!-- Coluna Direita: Previsão de Emails & Usernames -->
-      <div class="lg:col-span-5 space-y-6">
-        
-        <!-- Emails Corporativos Previstos -->
-        <div class="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-6 space-y-4">
-          <div>
-            <h4 class="text-xs uppercase font-bold tracking-wider text-zinc-400 flex items-center justify-between">
-              <span class="flex items-center space-x-2">
-                <i class="fa-solid fa-envelope text-emerald-400 text-sm"></i>
-                <span>Emails Profissionais Prováveis</span>
-              </span>
-              <span class="text-emerald-400 font-mono">${data.predicted_emails.length}</span>
-            </h4>
-            <p class="text-[11px] text-zinc-500 mt-1">Padrões de email mais utilizados pelas empresas para este nome:</p>
-          </div>
+    </div>
+  `;
 
-          <div class="space-y-2 max-h-72 overflow-y-auto pr-1">
-            ${hasEmails ? data.predicted_emails.map(e => `
-              <div class="flex items-center justify-between p-2.5 bg-zinc-950 rounded-xl border border-zinc-800 hover:border-emerald-500/40 transition">
-                <span class="font-mono text-xs text-zinc-200 select-all">${e.email}</span>
-                <button onclick="copyToClipboard('${e.email}', this)" class="p-1.5 px-2 bg-zinc-900 hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-white transition text-xs" title="Copiar Email">
-                  <i class="fa-regular fa-copy"></i>
-                </button>
-              </div>
-            `).join('') : '<p class="text-xs text-zinc-500 py-2">Indique a empresa para calcular previsões de email corporativo.</p>'}
-          </div>
+  container.innerHTML = html;
+}
 
-          ${hasExtracted ? `
-            <div class="pt-3 border-t border-zinc-800">
-              <span class="text-[11px] font-semibold text-emerald-400 block mb-2">Emails Encontrados no Texto Público:</span>
-              <div class="space-y-1.5">
-                ${data.extracted_emails.map(em => `
-                  <div class="flex items-center justify-between p-2 bg-emerald-950/20 border border-emerald-500/30 rounded-lg text-xs font-mono text-emerald-300">
-                    <span>${em}</span>
-                    <button onclick="copyToClipboard('${em}', this)" class="text-zinc-400 hover:text-white"><i class="fa-regular fa-copy"></i></button>
-                  </div>
-                `).join('')}
-              </div>
-            </div>
-          ` : ''}
-        </div>
-
-        <!-- Variações de Username para OSINT -->
-        <div class="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-6 space-y-4">
-          <div>
+function launchScraperWithDomain(url) {
+  switchTab('scraper');
+  const input = document.getElementById('scrape-url-input');
+  if (input) {
+    input.value = url;
+    startScrape();
+  }
+}
             <h4 class="text-xs uppercase font-bold tracking-wider text-zinc-400 flex items-center space-x-2">
               <i class="fa-solid fa-at text-indigo-400 text-sm"></i>
               <span>Variações de Username (OSINT)</span>

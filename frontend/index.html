@@ -112,7 +112,7 @@
             <i class="fa-solid fa-id-badge text-indigo-400"></i>
             <span>Localizar Profissional, Empresa & Contactos</span>
           </h2>
-          <p class="text-xs text-zinc-400 mt-1">Investigue qualquer pessoa no mundo: descubra perfis de LinkedIn, menções corporativas, cargos e obtenha os emails profissionais prováveis.</p>
+          <p class="text-xs text-zinc-400 mt-1">Investigação de alta precisão: pesquise por <strong>qualquer campo individualmente</strong> (ex: apenas a Empresa para descobrir o domínio exato, emails em uso e telefones oficiais, ou apenas Nome e Cargo).</p>
         </div>
 
         <form id="person-form" onsubmit="startPersonSearch(event)" class="space-y-4">
@@ -120,24 +120,24 @@
             
             <div class="md:col-span-5">
               <label class="block text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-2">
-                <i class="fa-solid fa-user text-indigo-400 mr-1"></i> Nome Completo da Pessoa *
+                <i class="fa-solid fa-user text-indigo-400 mr-1"></i> Nome da Pessoa (Opcional)
               </label>
-              <input type="text" id="person-name-input" required placeholder="ex: Paula Gracia" 
+              <input type="text" id="person-name-input" placeholder="ex: Paula Gracia" 
                      class="w-full px-4 py-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-white placeholder-zinc-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition text-sm">
             </div>
 
             <div class="md:col-span-4">
               <label class="block text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-2">
-                <i class="fa-solid fa-building text-indigo-400 mr-1"></i> Empresa / Organização
+                <i class="fa-solid fa-building text-indigo-400 mr-1"></i> Empresa / Organização (Opcional)
               </label>
-              <input type="text" id="person-company-input" placeholder="ex: Siemens, Galp, Alegria Activity" 
+              <input type="text" id="person-company-input" placeholder="ex: Alegria Activity, Siemens, Galp" 
                      class="w-full px-4 py-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-white placeholder-zinc-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition text-sm">
             </div>
 
             <div class="md:col-span-3 flex items-end">
               <button type="submit" id="btn-search-person" class="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-medium text-sm transition flex items-center justify-center space-x-2 shadow-lg shadow-indigo-600/25">
                 <i class="fa-solid fa-magnifying-glass"></i>
-                <span>Investigar Pessoa</span>
+                <span>Investigar / Localizar</span>
               </button>
             </div>
 
@@ -146,14 +146,19 @@
           <div class="grid grid-cols-1 md:grid-cols-12 gap-4 pt-1">
             <div class="md:col-span-6">
               <label class="block text-[11px] font-medium text-zinc-500 mb-1">Cargo / Especialidade (Opcional)</label>
-              <input type="text" id="person-role-input" placeholder="ex: Brand Manager, Marketing, Diretora, Engenheiro" 
+              <input type="text" id="person-role-input" placeholder="ex: Responsável Comercial, Marketing, Diretor" 
                      class="w-full px-3 py-1.5 bg-zinc-950/70 border border-zinc-800 rounded-lg text-white text-xs placeholder-zinc-600 focus:outline-none focus:border-indigo-500">
             </div>
             <div class="md:col-span-6">
               <label class="block text-[11px] font-medium text-zinc-500 mb-1">País ou Cidade (Opcional)</label>
-              <input type="text" id="person-country-input" placeholder="ex: Espanha, Portugal, Barcelona, Lisboa" 
+              <input type="text" id="person-country-input" placeholder="ex: Espanha, Portugal, Vitoria-Gasteiz, Lisboa" 
                      class="w-full px-3 py-1.5 bg-zinc-950/70 border border-zinc-800 rounded-lg text-white text-xs placeholder-zinc-600 focus:outline-none focus:border-indigo-500">
             </div>
+          </div>
+
+          <div id="person-form-alert" class="hidden p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-300 flex items-center space-x-2">
+            <i class="fa-solid fa-circle-exclamation text-amber-400"></i>
+            <span>Por favor, preencha pelo menos um dos campos acima (Nome, Empresa, Cargo ou País) para iniciar a pesquisa.</span>
           </div>
         </form>
       </div>
@@ -392,6 +397,6 @@
     NetContactos • Construído com FastAPI, Sherlock, Maigret, SearXNG & Tailwind CSS
   </footer>
 
-  <script src="app.js?v=20261008_2"></script>
+  <script src="app.js?v=20261008_4"></script>
 </body>
 </html>
