@@ -387,30 +387,6 @@ function launchScraperWithDomain(url) {
     startScrape();
   }
 }
-            <h4 class="text-xs uppercase font-bold tracking-wider text-zinc-400 flex items-center space-x-2">
-              <i class="fa-solid fa-at text-indigo-400 text-sm"></i>
-              <span>Variações de Username (OSINT)</span>
-            </h4>
-            <p class="text-[11px] text-zinc-500 mt-1">Possíveis perfis associados a esta pessoa nas redes:</p>
-          </div>
-
-          <div class="flex flex-wrap gap-2">
-            ${data.username_variants.map(u => `
-              <button onclick="investigateVariant('${u}')" class="px-2.5 py-1.5 rounded-lg bg-zinc-950 border border-zinc-800 hover:border-indigo-500/50 hover:bg-zinc-900 text-xs font-mono text-zinc-300 hover:text-white transition flex items-center space-x-1.5">
-                <span>@${u}</span>
-                <i class="fa-solid fa-magnifying-glass text-[9px] text-indigo-400"></i>
-              </button>
-            `).join('')}
-          </div>
-        </div>
-
-      </div>
-
-    </div>
-  `;
-
-  container.innerHTML = html;
-}
 
 // Investigar variação de username diretamente
 function investigateVariant(username) {
