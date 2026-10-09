@@ -390,8 +390,8 @@ def is_plausible_phone(phone_str: str) -> bool:
     """Valida rigorosamente números de telefone para PT (+351), ES (+34) e internacionais, eliminando falsos positivos."""
     if not phone_str:
         return False
-    # Rejeita números com padrões decimais/preços (ex: .7518)
-    if re.search(r"\.\d{4}", phone_str):
+    # Rejeita números com pontos decimais ou números de processo/decreto (ex: 115.419 ou .7518)
+    if "." in phone_str:
         return False
     raw = re.sub(r"[^\d+]", "", phone_str)
     digits = re.sub(r"\D", "", raw)
