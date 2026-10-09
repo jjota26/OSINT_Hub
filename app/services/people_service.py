@@ -350,16 +350,17 @@ def sanitize_person_name(name: str) -> str:
     """Higieniza caracteres corrompidos comuns em nomes espanhóis/portugueses."""
     if not name:
         return ""
+    cleaned = name
+    cleaned = re.sub(r'Jes[^\w\s]?s\b|Jes\u01e7s|Jes\ufffds', 'Jesús', cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r'Alegr[^\w\s]?a\b|Alegr\ufffda|Alegr\u01e7a', 'Alegría', cleaned, flags=re.IGNORECASE)
+    cleaned = cleaned.replace('\u01e7', 'ú')
+    cleaned = cleaned.replace('\ufffd', '')
+
     replacements = {
-        "Jesǧs": "Jesús",
-        "Jesús": "Jesús",
-        "Alegra": "Alegría",
-        "Alegría": "Alegría",
         "Ã¡": "á", "Ã©": "é", "Ã­": "í", "Ã³": "ó", "Ãº": "ú",
         "Ã±": "ñ", "Ã§": "ç", "Ã£": "ã", "Ãµ": "õ",
-        "\ufffd": "", "\u01e7": "ú"
+        "Ã€": "À", "Ã‰": "É", "Ã“": "Ó", "Ãš": "Ú"
     }
-    cleaned = name
     for k, v in replacements.items():
         cleaned = cleaned.replace(k, v)
     return re.sub(r'\s+', ' ', cleaned).strip()
