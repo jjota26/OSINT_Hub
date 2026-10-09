@@ -358,20 +358,20 @@ def sanitize_person_name(name: str) -> str:
 
     cleaned = name
     patterns = [
-        (r'\bJes\S*?s\b', 'Jesús'),
-        (r'\bAlegr\S*?a\b', 'Alegría'),
-        (r'\bGarc\S*?a\b', 'García'),
-        (r'\bRodr\S*?guez\b', 'Rodríguez'),
-        (r'\bMart\S*?nez\b', 'Martínez'),
-        (r'\bL\S*?pez\b', 'López'),
-        (r'\bGonz\S*?lez\b', 'González'),
-        (r'\bP\S*?rez\b', 'Pérez'),
-        (r'\bS\S*?nchez\b', 'Sánchez'),
-        (r'\bHern\S*?ndez\b', 'Hernández'),
-        (r'\bFern\S*?ndez\b', 'Fernández'),
-        (r'\bJos\S*?\b', 'José'),
-        (r'\bAnt\S*?nio\b', 'António'),
-        (r'\bJo\S*?o\b', 'João'),
+        (r'Jes\S+?s', 'Jesús'),
+        (r'Alegr\S+?a', 'Alegría'),
+        (r'Garc\S+?a', 'García'),
+        (r'Rodr\S+?guez', 'Rodríguez'),
+        (r'Mart\S+?nez', 'Martínez'),
+        (r'L\S+?pez', 'López'),
+        (r'Gonz\S+?lez', 'González'),
+        (r'P\S+?rez', 'Pérez'),
+        (r'S\S+?nchez', 'Sánchez'),
+        (r'Hern\S+?ndez', 'Hernández'),
+        (r'Fern\S+?ndez', 'Fernández'),
+        (r'Jos\S+?(\b|$)', 'José'),
+        (r'Ant\S+?nio', 'António'),
+        (r'Jo\S+?o', 'João'),
     ]
     for pat, rep in patterns:
         cleaned = re.sub(pat, rep, cleaned, flags=re.IGNORECASE)
