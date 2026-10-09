@@ -26,9 +26,11 @@ async def search_person(
             detail="Por favor, preencha pelo menos um campo para pesquisar (Nome, Empresa, Cargo ou País)."
         )
 
-    return await search_intelligence(
+    result = await search_intelligence(
         name=name,
         company=company,
         role=role,
         country=country
     )
+    from fastapi.responses import JSONResponse
+    return JSONResponse(content=result, media_type="application/json; charset=utf-8")
