@@ -105,6 +105,8 @@ async def discover_company_email_pattern(company: str, domain: str) -> tuple:
         f'"{domain}" "most common email format"'
     ]
 
+    candidates = []
+
     try:
         tasks = [execute_web_search(q) for q in queries]
         batch_res = await asyncio.gather(*tasks, return_exceptions=True)
@@ -113,21 +115,50 @@ async def discover_company_email_pattern(company: str, domain: str) -> tuple:
                 for r in res.get("results", []):
                     txt = f"{r.get('title', '')} {r.get('content', '')}".lower()
                     if "first" in txt or "last" in txt or "email format" in txt or "pattern" in txt:
-                        m_pct = re.search(r'(\d+(?:\.\d+)?%)\s+of\s+.*email', txt)
-                        pct_str = f" ({m_pct.group(1)} dos colaboradores)" if m_pct else ""
+                        # 1. [first_initial][last] / [f][last] / first initial + last
+                        if re.search(r'\[first[_\s-]?initial\][\.\-_]?\[last\]|\[f\][\.\-_]?\[last\]|first\s*initial\s*(?:\+|\.)?\s*last|f\.last', txt):
+                            m_pct = re.search(r'(?:\[first[_\s-]?initial\]|\[f\]|first\s*initial)[\s\S]{0,40}?(\d+(?:\.\d+)?%)', txt) or re.search(r'(\d+(?:\.\d+)?%)\s*(?:of|dos colaboradores|\))?', txt)
+                            pct_val = float(m_pct.group(1).replace('%', '')) if m_pct else 55.0
+                            pct_str = f" ({m_pct.group(1)} dos colaboradores)" if m_pct else ""
+                            candidates.append((f"[inicial_nome][ultimo_nome]@{domain}", pct_val, pct_str))
 
-                        if "[first]" in txt or "john@" in txt or "first@" in txt or "jane@" in txt:
-                            return f"[primeiro_nome]@{domain}", f"Fórmula Predominante{pct_str}"
-                        elif "[first].[last]" in txt or "first.last" in txt or "john.doe" in txt:
-                            return f"[primeiro_nome].[ultimo_nome]@{domain}", f"Fórmula Predominante{pct_str}"
-                        elif "[f][last]" in txt or "first initial" in txt:
-                            return f"[inicial_nome][ultimo_nome]@{domain}", f"Fórmula Predominante{pct_str}"
-                        elif "[first][l]" in txt:
-                            return f"[primeiro_nome][inicial_ultimo]@{domain}", f"Fórmula Predominante{pct_str}"
+                        # 2. [first].[last] / first.last / john.doe
+                        if re.search(r'\[first\][\.\-_]\[last\]|first\.last|john\.doe', txt):
+                            m_pct = re.search(r'(?:\[first\][\.\-_]\[last\]|first\.last)[\s\S]{0,40}?(\d+(?:\.\d+)?%)', txt) or re.search(r'(\d+(?:\.\d+)?%)\s*(?:of|dos colaboradores|\))?', txt)
+                            pct_val = float(m_pct.group(1).replace('%', '')) if m_pct else 50.0
+                            pct_str = f" ({m_pct.group(1)} dos colaboradores)" if m_pct else ""
+                            candidates.append((f"[primeiro_nome].[ultimo_nome]@{domain}", pct_val, pct_str))
+
+                        # 3. [first][last_initial] / [first][l]
+                        if re.search(r'\[first\][\.\-_]?\[last[_\s-]?initial\]|\[first\][\.\-_]?\[l\]', txt):
+                            m_pct = re.search(r'(\d+(?:\.\d+)?%)', txt)
+                            pct_val = float(m_pct.group(1).replace('%', '')) if m_pct else 30.0
+                            pct_str = f" ({m_pct.group(1)} dos colaboradores)" if m_pct else ""
+                            candidates.append((f"[primeiro_nome][inicial_ultimo]@{domain}", pct_val, pct_str))
+
+                        # 4. [first][last] / firstlast
+                        if re.search(r'\[first\]\[last\]|firstlast', txt):
+                            m_pct = re.search(r'(\d+(?:\.\d+)?%)', txt)
+                            pct_val = float(m_pct.group(1).replace('%', '')) if m_pct else 25.0
+                            pct_str = f" ({m_pct.group(1)} dos colaboradores)" if m_pct else ""
+                            candidates.append((f"[primeiro_nome][ultimo_nome]@{domain}", pct_val, pct_str))
+
+                        # 5. [first] isolado
+                        if re.search(r'\[first\](?![_\.\w-])|first@|john@', txt):
+                            m_pct = re.search(r'(?:\[first\]|first@)[\s\S]{0,40}?(\d+(?:\.\d+)?%)', txt) or re.search(r'(\d+(?:\.\d+)?%)\s*(?:of|dos colaboradores|\))?', txt)
+                            pct_val = float(m_pct.group(1).replace('%', '')) if m_pct else 20.0
+                            pct_str = f" ({m_pct.group(1)} dos colaboradores)" if m_pct else ""
+                            candidates.append((f"[primeiro_nome]@{domain}", pct_val, pct_str))
+
+        if candidates:
+            candidates.sort(key=lambda c: c[1], reverse=True)
+            best_pat, best_pct, best_str = candidates[0]
+            return best_pat, f"Fórmula Predominante{best_str}"
     except Exception:
         pass
 
     return f"[primeiro_nome]@{domain}", "Padrão Corporativo Comprovado"
+
 
 
 COUNTRY_MAP = {
@@ -337,6 +368,50 @@ def clean_phone(phone_str: str) -> str:
     if cleaned.startswith("00"):
         cleaned = "+" + cleaned[2:]
     return cleaned
+
+def normalize_and_deduplicate_phones(phones_list: List[str], target_country: Optional[str] = None) -> List[str]:
+    """Normaliza e desduplica números de telefone, priorizando formato legível e indicativo correto."""
+    seen_digits = set()
+    result = []
+    
+    def phone_priority(p: str):
+        digits = re.sub(r'\D', '', p)
+        has_plus = 1 if p.startswith('+') else 0
+        has_spaces = 1 if ' ' in p else 0
+        return (has_plus, has_spaces, len(digits))
+
+    sorted_phones = sorted(phones_list, key=phone_priority, reverse=True)
+
+    is_spain = bool(target_country and any(a in target_country.lower() for a in ["espanha", "españa", "spain", "vitoria", "madrid", "barcelona"]))
+    is_portugal = bool(target_country and any(a in target_country.lower() for a in ["portugal", "lisboa", "porto"]))
+
+    for p in sorted_phones:
+        digits = re.sub(r'\D', '', p)
+        if digits.startswith('34') and len(digits) == 11:
+            core = digits[2:]
+        elif digits.startswith('351') and len(digits) == 12:
+            core = digits[3:]
+        elif len(digits) == 9:
+            core = digits
+        else:
+            core = digits
+
+        if core and core not in seen_digits:
+            seen_digits.add(core)
+            # Formatação amigável se for Espanha (+34)
+            if (is_spain or (p.startswith('+34') or p.startswith('0034'))) and len(core) == 9 and core[0] in "9867":
+                formatted = f"+34 {core[:3]} {core[3:6]} {core[6:]}"
+                result.append(formatted)
+                continue
+            # Formatação amigável se for Portugal (+351)
+            elif (is_portugal or (p.startswith('+351') or p.startswith('00351'))) and len(core) == 9 and (core[0] in "29" or core.startswith(("800", "808", "707"))):
+                formatted = f"+351 {core[:3]} {core[3:6]} {core[6:]}"
+                result.append(formatted)
+                continue
+
+            result.append(p)
+
+    return result
 
 def check_mx_records(domain: str) -> Dict[str, Any]:
     """Verifica com exatidão se o domínio corporativo tem registos MX ativos e qual o provedor."""
@@ -625,14 +700,18 @@ async def search_intelligence(
         domain_mx_info = check_mx_records(official_domain)
 
     # 5. Rastreio Persuasivo Direto no Website Oficial da Empresa (se tivermos o domínio)
+    site_official_phones = []
     if official_domain:
         try:
             site_contacts = await fetch_company_page_contacts(f"https://{official_domain}")
             for em in site_contacts["emails"]:
-                verified_emails.add(em)
+                if em.endswith("@" + official_domain) or official_domain in em:
+                    verified_emails.add(em)
             for ph in site_contacts["phones"]:
                 if is_plausible_phone(ph):
-                    verified_phones.add(clean_phone(ph))
+                    clean_p = clean_phone(ph)
+                    site_official_phones.append(clean_p)
+                    verified_phones.add(clean_p)
         except Exception:
             pass
 
@@ -654,13 +733,13 @@ async def search_intelligence(
                 "status": "Em Uso Verificado",
                 "type": "Pessoal / Direto"
             })
-        elif official_domain and official_domain in em:
+        elif official_domain and (official_domain in em or em.endswith("@" + official_domain)):
             company_general_emails.append({
                 "email": em,
                 "status": "Em Uso Verificado",
                 "type": "Corporativo / Geral"
             })
-        elif em.split("@")[-1] not in GENERIC_EMAIL_DOMAINS:
+        elif not official_domain and not clean_company and em.split("@")[-1] not in GENERIC_EMAIL_DOMAINS:
             company_general_emails.append({
                 "email": em,
                 "status": "Encontrado em Fonte Pública",
@@ -674,10 +753,21 @@ async def search_intelligence(
         discovered_pat, pattern_notes = await discover_company_email_pattern(clean_company or "", official_domain)
         proven_pattern = discovered_pat
 
+    # Normalização, filtragem geográfica e desduplicação de telefones
+    normalized_phones = normalize_and_deduplicate_phones(list(verified_phones), clean_country)
+    default_company_phone = None
+    if site_official_phones:
+        site_norm = normalize_and_deduplicate_phones(site_official_phones, clean_country)
+        if site_norm:
+            default_company_phone = site_norm[0]
+            normalized_phones = site_norm + [p for p in normalized_phones if p not in site_norm]
+
+    if not default_company_phone and normalized_phones:
+        default_company_phone = normalized_phones[0]
+
     # 7. Reconhecimento Rigoroso de Colaboradores com Vínculo Atual Comprovado
     company_staff = []
     seen_staff_names = set()
-    default_company_phone = list(verified_phones)[0] if verified_phones else None
     smtp_cache = {}
 
     comp_clean = re.sub(r'[^a-zA-Z0-9]', '', clean_company).lower() if clean_company else ""
@@ -812,16 +902,38 @@ async def search_intelligence(
                     f_name = sanitize_name_for_email(words[0])
                     l_name = sanitize_name_for_email(words[-1]) if len(words) > 1 else ""
                     pattern = proven_pattern or f"[primeiro_nome]@{official_domain}"
-                    if "[primeiro_nome].[ultimo_nome]@" in pattern and l_name:
-                        staff_email = f"{f_name}.{l_name}@{official_domain}"
-                    elif "[inicial_nome][ultimo_nome]@" in pattern and l_name:
-                        staff_email = f"{f_name[0]}{l_name}@{official_domain}"
-                    else:
-                        staff_email = f"{f_name}@{official_domain}"
 
-                    # Verificação técnica de SMTP contra o servidor MX da empresa
-                    smtp_res = check_smtp_mailbox(staff_email, official_domain, smtp_cache)
-                    staff_email_status = smtp_res["status"]
+                    email_candidates = []
+                    if "[inicial_nome][ultimo_nome]@" in pattern and l_name:
+                        email_candidates.append(f"{f_name[0]}{l_name}@{official_domain}")
+                        if len(words) >= 3:
+                            mid_sur = sanitize_name_for_email(words[1])
+                            if mid_sur and len(mid_sur) >= 3:
+                                email_candidates.append(f"{f_name[0]}{mid_sur}@{official_domain}")
+                    elif "[primeiro_nome].[ultimo_nome]@" in pattern and l_name:
+                        email_candidates.append(f"{f_name}.{l_name}@{official_domain}")
+                        if len(words) >= 3:
+                            mid_sur = sanitize_name_for_email(words[1])
+                            if mid_sur and len(mid_sur) >= 3:
+                                email_candidates.append(f"{f_name}.{mid_sur}@{official_domain}")
+                    elif "[primeiro_nome][inicial_ultimo]@" in pattern and l_name:
+                        email_candidates.append(f"{f_name}{l_name[0]}@{official_domain}")
+                    elif "[primeiro_nome][ultimo_nome]@" in pattern and l_name:
+                        email_candidates.append(f"{f_name}{l_name}@{official_domain}")
+                    else:
+                        email_candidates.append(f"{f_name}@{official_domain}")
+
+                    chosen_email = email_candidates[0]
+                    chosen_status = "Padrão Corporativo"
+                    for cand in email_candidates:
+                        smtp_res = check_smtp_mailbox(cand, official_domain, smtp_cache)
+                        if smtp_res["valid"]:
+                            chosen_email = cand
+                            chosen_status = smtp_res["status"]
+                            break
+
+                    staff_email = chosen_email
+                    staff_email_status = chosen_status
 
                 # FILTRO DE CARGO SOLICITADO:
                 if clean_role and not matches_requested_role(clean_role, role, txt):
@@ -859,7 +971,7 @@ async def search_intelligence(
         "person_emails": target_person_emails,
         "company_emails": company_general_emails[:6],
         "proven_pattern": proven_pattern,
-        "phones": list(verified_phones)[:6],
+        "phones": normalized_phones[:6],
         "linkedin_profiles": linkedin_profiles[:8],
         "company_staff": company_staff[:15],
         "web_mentions": other_mentions[:10],
