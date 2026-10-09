@@ -350,12 +350,33 @@ def sanitize_person_name(name: str) -> str:
     """Higieniza caracteres corrompidos comuns em nomes espanhóis/portugueses."""
     if not name:
         return ""
-    cleaned = name
-    cleaned = re.sub(r'Jes[^\w\s]?s\b|Jes\u01e7s|Jes\ufffds', 'Jesús', cleaned, flags=re.IGNORECASE)
-    cleaned = re.sub(r'Alegr[^\w\s]?a\b|Alegr\ufffda|Alegr\u01e7a', 'Alegría', cleaned, flags=re.IGNORECASE)
-    cleaned = cleaned.replace('\u01e7', 'ú')
-    cleaned = cleaned.replace('\ufffd', '')
+    try:
+        fixed = name.encode('latin1').decode('utf-8')
+        name = fixed
+    except Exception:
+        pass
 
+    cleaned = name
+    patterns = [
+        (r'\bJes\S*?s\b', 'Jesús'),
+        (r'\bAlegr\S*?a\b', 'Alegría'),
+        (r'\bGarc\S*?a\b', 'García'),
+        (r'\bRodr\S*?guez\b', 'Rodríguez'),
+        (r'\bMart\S*?nez\b', 'Martínez'),
+        (r'\bL\S*?pez\b', 'López'),
+        (r'\bGonz\S*?lez\b', 'González'),
+        (r'\bP\S*?rez\b', 'Pérez'),
+        (r'\bS\S*?nchez\b', 'Sánchez'),
+        (r'\bHern\S*?ndez\b', 'Hernández'),
+        (r'\bFern\S*?ndez\b', 'Fernández'),
+        (r'\bJos\S*?\b', 'José'),
+        (r'\bAnt\S*?nio\b', 'António'),
+        (r'\bJo\S*?o\b', 'João'),
+    ]
+    for pat, rep in patterns:
+        cleaned = re.sub(pat, rep, cleaned, flags=re.IGNORECASE)
+
+    cleaned = cleaned.replace('\ufffd', '').replace('\u01e7', 'ú')
     replacements = {
         "Ã¡": "á", "Ã©": "é", "Ã­": "í", "Ã³": "ó", "Ãº": "ú",
         "Ã±": "ñ", "Ã§": "ç", "Ã£": "ã", "Ãµ": "õ",
