@@ -322,6 +322,48 @@ def sanitize_name_for_email(name: str) -> str:
     n = unicodedata.normalize('NFKD', name).encode('ASCII', 'ignore').decode('utf-8')
     return re.sub(r'[^a-zA-Z]', '', n).lower()
 
+DUMMY_SAMPLE_EMAILS = {"john@", "jane@", "john.doe@", "user@", "example@", "test@", "email@", "sample@"}
+
+def sanitize_extracted_email(raw_email: str) -> Optional[str]:
+    """Limpa e valida emails extraídos de texto livre, removendo palavras coladas e exemplos sintéticos."""
+    if not raw_email or "@" not in raw_email:
+        return None
+    em = raw_email.lower().strip(".,;:()[]{}'\" \t\r\n")
+    if em.endswith((".png", ".jpg", ".jpeg", ".webp", ".gif", ".js", ".css")):
+        return None
+
+    for dummy in DUMMY_SAMPLE_EMAILS:
+        if em.startswith(dummy):
+            return None
+
+    user_part, domain_part = em.split("@", 1)
+    standard_mailboxes = ("info", "contacto", "contact", "geral", "comercial", "administracion", "marketing", "atencion")
+    for mb in standard_mailboxes:
+        if user_part.endswith(mb) and len(user_part) > len(mb):
+            user_part = mb
+            em = f"{user_part}@{domain_part}"
+            break
+
+    return em
+
+def sanitize_person_name(name: str) -> str:
+    """Higieniza caracteres corrompidos comuns em nomes espanhóis/portugueses."""
+    if not name:
+        return ""
+    replacements = {
+        "Jesǧs": "Jesús",
+        "Jesús": "Jesús",
+        "Alegra": "Alegría",
+        "Alegría": "Alegría",
+        "Ã¡": "á", "Ã©": "é", "Ã­": "í", "Ã³": "ó", "Ãº": "ú",
+        "Ã±": "ñ", "Ã§": "ç", "Ã£": "ã", "Ãµ": "õ",
+        "\ufffd": "", "\u01e7": "ú"
+    }
+    cleaned = name
+    for k, v in replacements.items():
+        cleaned = cleaned.replace(k, v)
+    return re.sub(r'\s+', ' ', cleaned).strip()
+
 def is_plausible_phone(phone_str: str) -> bool:
     """Valida rigorosamente números de telefone para PT (+351), ES (+34) e internacionais, eliminando falsos positivos."""
     if not phone_str:
@@ -488,15 +530,18 @@ async def fetch_company_page_contacts(homepage_url: str) -> Dict[str, Any]:
         if text:
             # Emails
             for em in EMAIL_REGEX.findall(text):
-                em_clean = em.lower().strip(".,;")
-                if not em_clean.endswith((".png", ".jpg", ".webp", ".js", ".css")):
+                em_clean = sanitize_extracted_email(em)
+                if em_clean:
                     emails.add(em_clean)
             # Telefones e tags
             soup = BeautifulSoup(text, "html.parser")
             for a in soup.find_all("a", href=True):
                 h = a["href"].strip()
                 if h.startswith("mailto:"):
-                    emails.add(h.replace("mailto:", "").split("?")[0].lower().strip())
+                    raw_mail = h.replace("mailto:", "").split("?")[0]
+                    em_clean = sanitize_extracted_email(raw_mail)
+                    if em_clean:
+                        emails.add(em_clean)
                 elif h.startswith("tel:"):
                     raw_tel = h.replace("tel:", "").strip()
                     if is_plausible_phone(raw_tel):
@@ -622,8 +667,8 @@ async def search_intelligence(
 
         # Extrair emails reais do texto e dos snippets
         for em in EMAIL_REGEX.findall(text):
-            em_clean = em.lower().strip(".,;:()")
-            if not em_clean.endswith((".png", ".jpg", ".jpeg", ".webp", ".gif", ".js", ".css")):
+            em_clean = sanitize_extracted_email(em)
+            if em_clean:
                 verified_emails.add(em_clean)
 
         # Extrair telefones rigorosos
@@ -802,6 +847,7 @@ async def search_intelligence(
         if "rocketreach.co" in u:
             rr_matches = re.findall(r'([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)\s*\(([^)]+)\)', c)
             for rr_name, rr_role in rr_matches:
+                rr_name = sanitize_person_name(rr_name)
                 if rr_name.lower() not in seen_staff_names:
                     seen_staff_names.add(rr_name.lower())
                     w_rr = rr_name.split()
@@ -871,6 +917,7 @@ async def search_intelligence(
                     clean_staff_name = slug_n
 
         if clean_staff_name:
+            clean_staff_name = sanitize_person_name(clean_staff_name)
             clean_low = clean_staff_name.lower()
             # Evita nomes redundantes ou de letra única (ex: Paula G vs Paula Gracia Alonso)
             if any(clean_low != s and clean_low.startswith(s.split()[0]) and len(clean_staff_name.split()[-1].rstrip(".")) <= 1 for s in seen_staff_names):
