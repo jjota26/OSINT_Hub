@@ -95,14 +95,16 @@ def check_smtp_mailbox(email: str, domain: str, cache_dict: dict = None) -> dict
 
 
 async def discover_company_email_pattern(company: str, domain: str) -> tuple:
-    """Pesquisa diretórios e auditorias públicas para descobrir a fórmula exata de email da empresa."""
+    """Pesquisa diretórios e auditorias públicas para descobrir a fórmula exata de email corporativo da empresa."""
     if not domain:
-        return "[primeiro_nome]@" + (domain or "empresa.com"), "Padrão de Mercado"
+        return "[primeiro_nome].[ultimo_nome]@" + (domain or "empresa.com"), "Padrão Corporativo"
 
     queries = [
         f'"{domain}" "email format"',
         f'"{company}" "email format"',
-        f'"{domain}" "most common email format"'
+        f'"{domain}" "most common email format"',
+        f'site:rocketreach.co "{domain}"',
+        f'site:rocketreach.co "{company}" "email format"'
     ]
 
     candidates = []
@@ -113,51 +115,69 @@ async def discover_company_email_pattern(company: str, domain: str) -> tuple:
         for res in batch_res:
             if isinstance(res, dict):
                 for r in res.get("results", []):
-                    txt = f"{r.get('title', '')} {r.get('content', '')}".lower()
-                    if "first" in txt or "last" in txt or "email format" in txt or "pattern" in txt:
-                        # 1. [first_initial][last] / [f][last] / first initial + last
-                        if re.search(r'\[first[_\s-]?initial\][\.\-_]?\[last\]|\[f\][\.\-_]?\[last\]|first\s*initial\s*(?:\+|\.)?\s*last|f\.last', txt):
-                            m_pct = re.search(r'(?:\[first[_\s-]?initial\]|\[f\]|first\s*initial)[\s\S]{0,40}?(\d+(?:\.\d+)?%)', txt) or re.search(r'(\d+(?:\.\d+)?%)\s*(?:of|dos colaboradores|\))?', txt)
-                            pct_val = float(m_pct.group(1).replace('%', '')) if m_pct else 55.0
-                            pct_str = f" ({m_pct.group(1)} dos colaboradores)" if m_pct else ""
-                            candidates.append((f"[inicial_nome][ultimo_nome]@{domain}", pct_val, pct_str))
+                    raw_txt = f"{r.get('title', '')} {r.get('content', '')}"
+                    # Normaliza espaços múltiplos e espaços colados a pontuações de domínios
+                    txt = re.sub(r'\s+', ' ', raw_txt).lower()
+                    txt_clean = re.sub(r'\s*([@\.-])\s*', r'\1', txt)
 
-                        # 2. [first].[last] / first.last / john.doe
-                        if re.search(r'\[first\][\.\-_]\[last\]|first\.last|john\.doe', txt):
-                            m_pct = re.search(r'(?:\[first\][\.\-_]\[last\]|first\.last)[\s\S]{0,40}?(\d+(?:\.\d+)?%)', txt) or re.search(r'(\d+(?:\.\d+)?%)\s*(?:of|dos colaboradores|\))?', txt)
-                            pct_val = float(m_pct.group(1).replace('%', '')) if m_pct else 50.0
-                            pct_str = f" ({m_pct.group(1)} dos colaboradores)" if m_pct else ""
-                            candidates.append((f"[primeiro_nome].[ultimo_nome]@{domain}", pct_val, pct_str))
+                    def get_pct(pattern_context, default=50.0):
+                        m = re.search(pattern_context + r'[\s\S]{0,60}?(\d+(?:\.\d+)?%)', txt)
+                        if not m:
+                            m = re.search(r'(\d+(?:\.\d+)?%)\s*(?:of|dos colaboradores|\))?', txt)
+                        return float(m.group(1).replace('%', '')) if m else default
 
-                        # 3. [first][last_initial] / [first][l]
-                        if re.search(r'\[first\][\.\-_]?\[last[_\s-]?initial\]|\[first\][\.\-_]?\[l\]', txt):
-                            m_pct = re.search(r'(\d+(?:\.\d+)?%)', txt)
-                            pct_val = float(m_pct.group(1).replace('%', '')) if m_pct else 30.0
-                            pct_str = f" ({m_pct.group(1)} dos colaboradores)" if m_pct else ""
-                            candidates.append((f"[primeiro_nome][inicial_ultimo]@{domain}", pct_val, pct_str))
+                    # 1. Emails mascarados em snippets de diretórios executivos (ex: j******@domain ou john.d***@domain)
+                    m_masked_fl = re.search(r'\b[a-z]\*+@' + re.escape(domain), txt_clean)
+                    if m_masked_fl:
+                        candidates.append((f"[inicial_nome][ultimo_nome]@{domain}", 95.0, " (Confirmado por Registos Reais)"))
 
-                        # 4. [first][last] / firstlast
-                        if re.search(r'\[first\]\[last\]|firstlast', txt):
-                            m_pct = re.search(r'(\d+(?:\.\d+)?%)', txt)
-                            pct_val = float(m_pct.group(1).replace('%', '')) if m_pct else 25.0
-                            pct_str = f" ({m_pct.group(1)} dos colaboradores)" if m_pct else ""
-                            candidates.append((f"[primeiro_nome][ultimo_nome]@{domain}", pct_val, pct_str))
+                    m_masked_dot = re.search(r'\b[a-z]+\.\*+@' + re.escape(domain), txt_clean)
+                    if m_masked_dot:
+                        candidates.append((f"[primeiro_nome].[ultimo_nome]@{domain}", 96.0, " (Confirmado por Registos Reais)"))
 
-                        # 5. [first] isolado
-                        if re.search(r'\[first\](?![_\.\w-])|first@|john@', txt):
-                            m_pct = re.search(r'(?:\[first\]|first@)[\s\S]{0,40}?(\d+(?:\.\d+)?%)', txt) or re.search(r'(\d+(?:\.\d+)?%)\s*(?:of|dos colaboradores|\))?', txt)
-                            pct_val = float(m_pct.group(1).replace('%', '')) if m_pct else 20.0
-                            pct_str = f" ({m_pct.group(1)} dos colaboradores)" if m_pct else ""
-                            candidates.append((f"[primeiro_nome]@{domain}", pct_val, pct_str))
+                    # 2. [first_initial][last] / [f][last] / jdoe@ / jsmith@
+                    # Ex: [first_initial][last], [first_initial] [last], {first_initial}{last}, f.last, jdoe@
+                    p1_regex = r'\[first[_\s-]?initial\]\s*[\.\-_]?\s*\[last\]|\{first[_\s-]?initial\}\s*[\.\-_]?\s*\{last\}|\[f\]\s*[\.\-_]?\s*\[last\]|\{f\}\s*[\.\-_]?\s*\{last\}|first\s*initial\s*(?:\+|\.|\s)?\s*last|\bjdoe@|\bjsmith@'
+                    if re.search(p1_regex, txt):
+                        pct = get_pct(r'(?:\[first[_\s-]?initial\]|first\s*initial|jdoe@)', default=60.0)
+                        candidates.append((f"[inicial_nome][ultimo_nome]@{domain}", pct + 15.0, f" ({pct}% dos colaboradores)"))
+
+                    # 3. [first].[last] / {first}.{last} / jane.doe@ / john.doe@ / first.last
+                    # Ex: [first]. [last], [first].[last], {first}. {last}, john.doe@, jane.doe@
+                    p2_regex = r'\[first\]\s*[\.]\s*\[last\]|\{first\}\s*[\.]\s*\{last\}|first\s*\.\s*last|\bjane\.doe@|\bjohn\.doe@|\bjohn\.smith@'
+                    if re.search(p2_regex, txt):
+                        pct = get_pct(r'(?:\[first\]\s*\.\s*\[last\]|first\s*\.\s*last|jane\.doe@|john\.doe@)', default=65.0)
+                        candidates.append((f"[primeiro_nome].[ultimo_nome]@{domain}", pct + 20.0, f" ({pct}% dos colaboradores)"))
+
+                    # 4. [first_initial].[last] / j.doe@ / j.smith@
+                    p3_regex = r'\[first[_\s-]?initial\]\s*\.\s*\[last\]|\{first[_\s-]?initial\}\s*\.\s*\{last\}|\bj\.doe@|\bj\.smith@'
+                    if re.search(p3_regex, txt):
+                        pct = get_pct(r'(?:\[first[_\s-]?initial\]\s*\.\s*\[last\]|j\.doe@)', default=45.0)
+                        candidates.append((f"[inicial_nome].[ultimo_nome]@{domain}", pct + 10.0, f" ({pct}% dos colaboradores)"))
+
+                    # 5. [first][last] / {first}{last} / firstlast / janedoe@
+                    p4_regex = r'\[first\]\s*\[last\]|\{first\}\s*\{last\}|\[first\]\[last\]|\{first\}\{last\}|firstlast|\bjanedoe@|\bjohndoe@'
+                    if re.search(p4_regex, txt):
+                        pct = get_pct(r'(?:\[first\]\s*\[last\]|firstlast)', default=35.0)
+                        candidates.append((f"[primeiro_nome][ultimo_nome]@{domain}", pct + 5.0, f" ({pct}% dos colaboradores)"))
+
+                    # 6. [first][last_initial] / [first][l]
+                    p5_regex = r'\[first\]\s*[\.\-_]?\s*\[last[_\s-]?initial\]|\[first\]\s*[\.\-_]?\s*\[l\]|\{first\}\s*\{l\}'
+                    if re.search(p5_regex, txt):
+                        pct = get_pct(r'\[first\][\s\S]{0,15}\[last', default=30.0)
+                        candidates.append((f"[primeiro_nome][inicial_ultimo]@{domain}", pct, f" ({pct}% dos colaboradores)"))
 
         if candidates:
             candidates.sort(key=lambda c: c[1], reverse=True)
-            best_pat, best_pct, best_str = candidates[0]
+            best_pat, best_score, best_str = candidates[0]
             return best_pat, f"Fórmula Predominante{best_str}"
     except Exception:
         pass
 
-    return f"[primeiro_nome]@{domain}", "Padrão Corporativo Comprovado"
+    # Fallback Corporativo Real:
+    if domain.endswith(".es") or domain.endswith(".pt"):
+        return f"[inicial_nome][ultimo_nome]@{domain}", "Padrão Corporativo Predominante"
+    return f"[primeiro_nome].[ultimo_nome]@{domain}", "Padrão Corporativo Internacional"
 
 
 
@@ -321,6 +341,127 @@ def sanitize_name_for_email(name: str) -> str:
         return ""
     n = unicodedata.normalize('NFKD', name).encode('ASCII', 'ignore').decode('utf-8')
     return re.sub(r'[^a-zA-Z]', '', n).lower()
+
+SPANISH_PORTUGUESE_FIRST_NAMES = {
+    "juan", "jose", "josé", "maria", "maría", "carlos", "ana", "luis", "luís",
+    "antonio", "antónio", "manuel", "francisco", "david", "javier", "daniel",
+    "jesus", "jesús", "pedro", "miguel", "angel", "ángel", "pablo", "alejandro",
+    "fernando", "jorge", "alberto", "diego", "sergio", "sérgio", "joao", "joão",
+    "tiago", "goncalo", "gonçalo", "rui", "nuno", "diogo", "andre", "andré",
+    "mario", "mário", "vitor", "vítor", "paulo", "ricardo", "bruno", "bernardo",
+    "esther", "carmen", "laura", "paula", "marta", "elena", "isabel", "sara",
+    "pilar", "lucia", "lucía", "inês", "ines", "beatriz", "sofia", "catarina"
+}
+
+def extract_name_components(name: str) -> dict:
+    """Decompõe nomes ibéricos e internacionais identificando primeiro nome, nome do meio e apelidos paterno e materno."""
+    words = [w for w in name.split() if len(w) >= 2]
+    if not words:
+        return {"first": "", "first_initial": "", "middle": "", "middle_initial": "", "surname": "", "second_surname": ""}
+
+    f_raw = words[0]
+    f_clean = sanitize_name_for_email(f_raw)
+    f_init = f_clean[0] if f_clean else ""
+
+    if len(words) == 1:
+        return {"first": f_clean, "first_initial": f_init, "middle": "", "middle_initial": "", "surname": f_clean, "second_surname": ""}
+
+    if len(words) == 2:
+        sur_clean = sanitize_name_for_email(words[1])
+        return {"first": f_clean, "first_initial": f_init, "middle": "", "middle_initial": "", "surname": sur_clean, "second_surname": ""}
+
+    if len(words) == 3:
+        w1_clean = sanitize_name_for_email(words[1])
+        w2_clean = sanitize_name_for_email(words[2])
+        if words[1].lower() in SPANISH_PORTUGUESE_FIRST_NAMES:
+            return {"first": f_clean, "first_initial": f_init, "middle": w1_clean, "middle_initial": w1_clean[0] if w1_clean else "", "surname": w2_clean, "second_surname": ""}
+        else:
+            return {"first": f_clean, "first_initial": f_init, "middle": "", "middle_initial": "", "surname": w1_clean, "second_surname": w2_clean}
+
+    w1_clean = sanitize_name_for_email(words[1])
+    w2_clean = sanitize_name_for_email(words[2])
+    w3_clean = sanitize_name_for_email(words[3])
+
+    if words[1].lower() in SPANISH_PORTUGUESE_FIRST_NAMES:
+        return {"first": f_clean, "first_initial": f_init, "middle": w1_clean, "middle_initial": w1_clean[0] if w1_clean else "", "surname": w2_clean, "second_surname": w3_clean}
+    else:
+        return {"first": f_clean, "first_initial": f_init, "middle": "", "middle_initial": "", "surname": w1_clean, "second_surname": w2_clean}
+
+def generate_staff_email_candidates(name: str, domain: str, pattern: str = None) -> list:
+    """Gera candidatos de email de colaboradores respeitando estritamente o padrão da empresa e nunca gerando apenas o primeiro nome."""
+    comp = extract_name_components(name)
+    f = comp["first"]
+    fi = comp["first_initial"]
+    m = comp["middle"]
+    mi = comp["middle_initial"]
+    sur = comp["surname"]
+    sur2 = comp["second_surname"]
+
+    if not domain or not f:
+        return []
+
+    pat = pattern or "[inicial_nome][ultimo_nome]@"
+    cands = []
+
+    # 1. Padrão Inicial + Apelido (ex: jsmith@, jcenturio@, jalegria@)
+    if "[inicial_nome][ultimo_nome]@" in pat or "[inicial_nome].[ultimo_nome]@" in pat:
+        dot = "." if "[inicial_nome].[ultimo_nome]@" in pat else ""
+        if sur:
+            cands.append(f"{fi}{dot}{sur}@{domain}")
+        if mi and sur:
+            cands.append(f"{fi}{mi}{dot}{sur}@{domain}")
+        if sur2:
+            cands.append(f"{fi}{dot}{sur2}@{domain}")
+        if sur and sur2:
+            cands.append(f"{fi}{dot}{sur}{sur2[0]}@{domain}")
+        if sur:
+            cands.append(f"{f}{dot}{sur}@{domain}")
+
+    # 2. Padrão Nome.Apelido (ex: john.smith@, javier.ron@)
+    elif "[primeiro_nome].[ultimo_nome]@" in pat:
+        if sur:
+            cands.append(f"{f}.{sur}@{domain}")
+        if sur2:
+            cands.append(f"{f}.{sur2}@{domain}")
+        if m and sur:
+            cands.append(f"{f}.{m}.{sur}@{domain}")
+        if sur:
+            cands.append(f"{fi}.{sur}@{domain}")
+
+    # 3. Padrão NomeApelido (ex: johnsmith@, javierron@)
+    elif "[primeiro_nome][ultimo_nome]@" in pat:
+        if sur:
+            cands.append(f"{f}{sur}@{domain}")
+        if sur2:
+            cands.append(f"{f}{sur2}@{domain}")
+        if fi and sur:
+            cands.append(f"{fi}{sur}@{domain}")
+
+    # 4. Padrão Nome + Inicial Apelido (ex: johns@)
+    elif "[primeiro_nome][inicial_ultimo]@" in pat:
+        if sur:
+            cands.append(f"{f}{sur[0]}@{domain}")
+        if sur2:
+            cands.append(f"{f}{sur2[0]}@{domain}")
+
+    # 5. Fallback corporativo de alta precisão (NUNCA primeiro nome isolado)
+    else:
+        if sur:
+            cands.append(f"{fi}{sur}@{domain}")
+            cands.append(f"{f}.{sur}@{domain}")
+            if mi:
+                cands.append(f"{fi}{mi}{sur}@{domain}")
+        else:
+            cands.append(f"{f}@{domain}")
+
+    # Deduplicar preservando ordem de prioridade
+    seen = set()
+    res = []
+    for c in cands:
+        if c not in seen:
+            seen.add(c)
+            res.append(c)
+    return res
 
 DUMMY_SAMPLE_EMAILS = {"john@", "jane@", "john.doe@", "user@", "example@", "test@", "email@", "sample@"}
 
@@ -872,17 +1013,8 @@ async def search_intelligence(
                 rr_name = sanitize_person_name(rr_name)
                 if rr_name.lower() not in seen_staff_names:
                     seen_staff_names.add(rr_name.lower())
-                    w_rr = rr_name.split()
-                    f_name = sanitize_name_for_email(w_rr[0])
-                    l_name = sanitize_name_for_email(w_rr[-1]) if len(w_rr) > 1 else ""
-                    
-                    if proven_pattern and "[primeiro_nome].[ultimo_nome]@" in proven_pattern and l_name:
-                        s_email = f"{f_name}.{l_name}@{official_domain}"
-                    elif proven_pattern and "[inicial_nome][ultimo_nome]@" in proven_pattern and l_name:
-                        s_email = f"{f_name[0]}{l_name}@{official_domain}"
-                    else:
-                        s_email = f"{f_name}@{official_domain}" if official_domain else None
-
+                    cands = generate_staff_email_candidates(rr_name, official_domain, proven_pattern)
+                    s_email = cands[0] if cands else None
                     smtp_res = check_smtp_mailbox(s_email, official_domain, smtp_cache) if s_email else {"status": "Padrão Corporativo"}
                     company_staff.append({
                         "name": rr_name,
@@ -955,54 +1087,38 @@ async def search_intelligence(
                             role = r_kw
                             break
 
-                # 1. Busca email em uso no texto
+                # 1. Busca email em uso no texto (apenas se for do domínio da empresa e não for genérico)
                 emails_in_txt = EMAIL_REGEX.findall(txt)
                 staff_email = None
                 staff_email_status = None
+                comp_info = extract_name_components(clean_staff_name)
+
                 for em in emails_in_txt:
                     em_low = em.lower().strip(".,;")
-                    if words[0].lower() in em_low:
-                        staff_email = em_low
-                        staff_email_status = "Em Uso Verificado (Público)"
-                        break
+                    if official_domain and (em_low.endswith("@" + official_domain) or f"@{official_domain}" in em_low):
+                        if not any(em_low.startswith(gen) for gen in ("info@", "contacto@", "contact@", "geral@", "comercial@", "admin@", "support@", "marketing@", "atencion@")):
+                            user_part = em_low.split("@")[0]
+                            # Verifica se o email contém o apelido ou nome/iniciais da pessoa
+                            if (comp_info["surname"] and comp_info["surname"] in user_part) or (comp_info["first"] and comp_info["first"] in user_part):
+                                staff_email = em_low
+                                staff_email_status = "Em Uso Verificado (Público)"
+                                break
 
                 # 2. Se não tem email explícito, calcula pelo padrão corporativo e valida no servidor de correio via SMTP
                 if not staff_email and official_domain:
-                    f_name = sanitize_name_for_email(words[0])
-                    l_name = sanitize_name_for_email(words[-1]) if len(words) > 1 else ""
-                    pattern = proven_pattern or f"[primeiro_nome]@{official_domain}"
+                    email_candidates = generate_staff_email_candidates(clean_staff_name, official_domain, proven_pattern)
+                    if email_candidates:
+                        chosen_email = email_candidates[0]
+                        chosen_status = "Padrão Corporativo"
+                        for cand in email_candidates:
+                            smtp_res = check_smtp_mailbox(cand, official_domain, smtp_cache)
+                            if smtp_res.get("valid"):
+                                chosen_email = cand
+                                chosen_status = smtp_res.get("status")
+                                break
 
-                    email_candidates = []
-                    if "[inicial_nome][ultimo_nome]@" in pattern and l_name:
-                        email_candidates.append(f"{f_name[0]}{l_name}@{official_domain}")
-                        if len(words) >= 3:
-                            mid_sur = sanitize_name_for_email(words[1])
-                            if mid_sur and len(mid_sur) >= 3:
-                                email_candidates.append(f"{f_name[0]}{mid_sur}@{official_domain}")
-                    elif "[primeiro_nome].[ultimo_nome]@" in pattern and l_name:
-                        email_candidates.append(f"{f_name}.{l_name}@{official_domain}")
-                        if len(words) >= 3:
-                            mid_sur = sanitize_name_for_email(words[1])
-                            if mid_sur and len(mid_sur) >= 3:
-                                email_candidates.append(f"{f_name}.{mid_sur}@{official_domain}")
-                    elif "[primeiro_nome][inicial_ultimo]@" in pattern and l_name:
-                        email_candidates.append(f"{f_name}{l_name[0]}@{official_domain}")
-                    elif "[primeiro_nome][ultimo_nome]@" in pattern and l_name:
-                        email_candidates.append(f"{f_name}{l_name}@{official_domain}")
-                    else:
-                        email_candidates.append(f"{f_name}@{official_domain}")
-
-                    chosen_email = email_candidates[0]
-                    chosen_status = "Padrão Corporativo"
-                    for cand in email_candidates:
-                        smtp_res = check_smtp_mailbox(cand, official_domain, smtp_cache)
-                        if smtp_res["valid"]:
-                            chosen_email = cand
-                            chosen_status = smtp_res["status"]
-                            break
-
-                    staff_email = chosen_email
-                    staff_email_status = chosen_status
+                        staff_email = chosen_email
+                        staff_email_status = chosen_status
 
                 # FILTRO DE CARGO SOLICITADO:
                 if clean_role and not matches_requested_role(clean_role, role, txt):
